@@ -1,14 +1,7 @@
 use strum::{Display, EnumString};
 
-use crate::{modbus::DucoModbusConnection, mqtt::MqttData, MqttBridgeError};
-
-pub trait DucoNode {
-    fn number(&self) -> u16;
-    fn topics_that_need_updating(&self) -> Vec<MqttData>;
-    async fn update_status(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), MqttBridgeError>;
-}
-
 #[derive(FromPrimitive, EnumString, Display)]
+#[repr(u16)]
 pub enum NodeType {
     Unknown = 0,
     RemoteControlRFBAT = 8,
@@ -31,6 +24,7 @@ pub enum NodeType {
 }
 
 #[derive(FromPrimitive, EnumString, Display, Debug)]
+#[repr(u16)]
 pub enum VentilationPosition {
     AUTO = 0,
     Manual1 = 4,

@@ -1,8 +1,7 @@
-use crate::duconode::DucoNode;
-use crate::duconode::NodeType;
+use crate::duconodetypes::NodeType;
+use crate::duxoboxnode::DucoBoxNode;
 use crate::modbus::{DucoModbusConnection, ModbusConfig};
 use crate::mqtt::{MqttConfig, MqttConnection};
-use crate::nodetypes::{CO2RoomSensorNode, DucoBoxNode, SensorlessControlValveNode};
 use crate::MqttBridgeError;
 use log;
 use tokio::time;
@@ -10,31 +9,26 @@ use tokio::time;
 pub struct DucoMqttBridgeConfig {
     pub modbus_config: ModbusConfig,
     pub mqtt_config: MqttConfig,
-}
-
-enum Node {
-    DucoBoxNode(DucoBoxNode),
-    CO2RoomSensorNode(CO2RoomSensorNode),
-    SensorlessControlValveNode(SensorlessControlValveNode),
+    pub mqtt_base_topic: String,
 }
 
 pub struct DucoMqttBridge {
     mqtt: MqttConnection,
-    modbus: DucoModbusConnection,
-    nodes: Vec<Node>,
+    nodes: Vec<DucoBoxNode>,
+    modbus_cfg: ModbusConfig,
 }
 
 impl DucoMqttBridge {
     pub fn new(cfg: DucoMqttBridgeConfig) -> DucoMqttBridge {
         DucoMqttBridge {
             mqtt: MqttConnection::new(cfg.mqtt_config),
-            modbus: DucoModbusConnection::new(cfg.modbus_config),
+            modbus_cfg: cfg.modbus_config,
             nodes: Vec::new(),
         }
     }
 
     pub async fn run(mut self) -> Result<(), MqttBridgeError> {
-        let mut interval = time::interval(time::Duration::from_secs(5));
+        let mut interval = time::interval(time::Duration::from_secs(60));
 
         loop {
             tokio::select! {
@@ -44,56 +38,67 @@ impl DucoMqttBridge {
                     }
                 }
                 _ = interval.tick() => {
-                    log::debug!("Update modbus values");
-                    if !self.modbus.is_connected() {
-                        log::debug!("Modbus not connected: trying to reconnect");
-                        if let Err(err) = self.modbus.connect().await {
-                            log::warn!("Failed to establish modbus connection: {err}");
-                        } else {
-                            log::debug!("Modbus connection restored");
-                            if let Err(err) = self.discover_nodes().await {
-                                log::error!("Failed to populate node information: {err}");
-                            }
-                        }
-                    }
-
-                    if self.modbus.is_connected() {
-                        if let Err(err) = self.update_nodes().await {
-                            log::warn!("Failed to update node states: {err}")
-                        }
+                    if let Err(err) = self.poll_modbus().await {
+                        log::error!("Failed to update status: {err}");
+                        self.reset_nodes();
+                        let _ = self.publish_nodes().await;
                     }
                 }
             }
         }
     }
 
-    async fn update_nodes(&mut self) -> Result<(), MqttBridgeError> {
+    async fn poll_modbus(&mut self) -> Result<(), MqttBridgeError> {
+        log::debug!("Update modbus values");
+        let mut modbus = DucoModbusConnection::new();
+        modbus.connect(&self.modbus_cfg).await?;
+
+        if self.nodes.is_empty() {
+            self.discover_nodes(&mut modbus).await?;
+        }
+
+        self.update_nodes(&mut modbus).await?;
+        self.publish_nodes().await?;
+
+        Ok(())
+    }
+
+    async fn update_nodes(
+        &mut self,
+        modbus: &mut DucoModbusConnection,
+    ) -> Result<(), MqttBridgeError> {
         for node in self.nodes.iter_mut() {
-            match node {
-                Node::DucoBoxNode(node) => {
-                    node.update_status(&mut self.modbus).await?;
-                    log::debug!("Node: {:?}", node);
-                }
-                Node::CO2RoomSensorNode(node) => {
-                    node.update_status(&mut self.modbus).await?;
-                    log::debug!("Node: {:?}", node);
-                }
-                Node::SensorlessControlValveNode(node) => {
-                    node.update_status(&mut self.modbus).await?;
-                    log::debug!("Node: {:?}", node);
-                }
+            node.update_status(modbus).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn publish_nodes(&mut self) -> Result<(), MqttBridgeError> {
+        for node in self.nodes.iter_mut() {
+            for mqtt_data in node.topics_that_need_updating() {
+                log::debug!("{}: {}", mqtt_data.topic, mqtt_data.payload);
             }
         }
 
         Ok(())
     }
 
-    async fn discover_nodes(&mut self) -> Result<(), MqttBridgeError> {
+    fn reset_nodes(&mut self) {
+        for node in self.nodes.iter_mut() {
+            node.reset();
+        }
+    }
+
+    async fn discover_nodes(
+        &mut self,
+        modbus: &mut DucoModbusConnection,
+    ) -> Result<(), MqttBridgeError> {
         self.nodes.clear();
 
         let mut node_indexes: Vec<u16> = Vec::new();
 
-        let regs = self.modbus.read_input_registers(0, 9).await?;
+        let regs = modbus.read_input_registers(0, 9).await?;
         let mut index = 0;
         for reg in regs {
             for i in 0..16 {
@@ -106,24 +111,25 @@ impl DucoMqttBridge {
             index += 1;
         }
 
-        for node in node_indexes {
-            let node_type_nr = self.modbus.read_input_register(node * 100).await?;
+        for number in node_indexes {
+            let node_type_nr = modbus.read_input_register(number * 100).await?;
             if let Some(node_type) = num::FromPrimitive::from_u16(node_type_nr) {
-                log::debug!("Node {} has node type {}", node, node_type);
+                log::debug!("Node {} has node type {}", number, node_type);
 
                 match node_type {
                     NodeType::DucoBox => {
-                        self.nodes.push(Node::DucoBoxNode(DucoBoxNode::new(node)));
+                        self.nodes.push(DucoBoxNode::create_duco_box_node(number));
                     }
                     NodeType::Unknown => todo!(),
                     NodeType::RemoteControlRFBAT => todo!(),
                     NodeType::RemoteControlRFWired => todo!(),
                     NodeType::HumidityRoomSensor => todo!(),
-                    NodeType::CO2RoomSensor => self.nodes.push(Node::CO2RoomSensorNode(CO2RoomSensorNode::new(node))),
-                    NodeType::SensorlessControlValve => {
-                        self.nodes
-                            .push(Node::SensorlessControlValveNode(SensorlessControlValveNode::new(node)));
-                    }
+                    NodeType::CO2RoomSensor => self
+                        .nodes
+                        .push(DucoBoxNode::create_co2_room_sensor_node(number)),
+                    NodeType::SensorlessControlValve => self
+                        .nodes
+                        .push(DucoBoxNode::create_sensorless_control_valve(number)),
                     NodeType::HumidityControlValve => todo!(),
                     NodeType::CO2ControlValve => todo!(),
                     NodeType::SwitchSensor => todo!(),
@@ -137,7 +143,11 @@ impl DucoMqttBridge {
                     NodeType::DucoWeatherStation => todo!(),
                 }
             } else {
-                log::debug!("Node {} has unsupported node type '{}', ignoring", node, node_type_nr);
+                log::debug!(
+                    "Node {} has unsupported node type '{}', ignoring",
+                    number,
+                    node_type_nr
+                );
             }
         }
 

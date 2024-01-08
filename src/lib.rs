@@ -1,9 +1,9 @@
 #![warn(clippy::unwrap_used)]
 pub mod bridge;
-mod duconode;
+mod duconodetypes;
 pub mod modbus;
 pub mod mqtt;
-mod nodetypes;
+mod duxoboxnode;
 
 extern crate num;
 #[macro_use]
