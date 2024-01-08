@@ -16,6 +16,7 @@ pub struct DucoMqttBridge {
     mqtt: MqttConnection,
     nodes: Vec<DucoBoxNode>,
     modbus_cfg: ModbusConfig,
+    mqtt_base_topic: String,
 }
 
 impl DucoMqttBridge {
@@ -24,6 +25,7 @@ impl DucoMqttBridge {
             mqtt: MqttConnection::new(cfg.mqtt_config),
             modbus_cfg: cfg.modbus_config,
             nodes: Vec::new(),
+            mqtt_base_topic: cfg.mqtt_base_topic,
         }
     }
 
@@ -76,8 +78,11 @@ impl DucoMqttBridge {
 
     async fn publish_nodes(&mut self) -> Result<(), MqttBridgeError> {
         for node in self.nodes.iter_mut() {
-            for mqtt_data in node.topics_that_need_updating() {
+            for mut mqtt_data in node.topics_that_need_updating() {
+                mqtt_data.topic = format!("{}/{}", self.mqtt_base_topic, mqtt_data.topic);
                 log::debug!("{}: {}", mqtt_data.topic, mqtt_data.payload);
+                //First check topic names
+                //self.mqtt.publish(mqtt_data).await?;
             }
         }
 

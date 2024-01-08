@@ -54,7 +54,7 @@ impl MqttConnection {
         Ok(None)
     }
 
-    async fn publish(&mut self, data: MqttData) -> Result<(), MqttBridgeError> {
+    pub async fn publish(&mut self, data: MqttData) -> Result<(), MqttBridgeError> {
         Ok(self
             .client
             .publish(data.topic, QoS::AtLeastOnce, true, data.payload)
