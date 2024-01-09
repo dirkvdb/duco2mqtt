@@ -26,6 +26,12 @@ struct Opt {
     #[clap(long = "mqtt-addr", env = "D2M_MQTT_ADDRESS")]
     mqtt_addr: String,
 
+    #[clap(long = "mqtt-user", env = "D2M_MQTT_USER")]
+    mqtt_user: Option<String>,
+
+    #[clap(long = "mqtt-pass", env = "D2M_MQTT_PASS")]
+    mqtt_password: Option<String>,
+
     #[clap(long = "mqtt-port", env = "D2M_MQTT_PORT", default_value_t = 1883)]
     mqtt_port: u16,
 
@@ -54,6 +60,8 @@ async fn main() {
             server: opt.mqtt_addr,
             port: opt.mqtt_port,
             client_id: opt.mqtt_client_id,
+            user: opt.mqtt_user,
+            password: opt.mqtt_password,
         },
         mqtt_base_topic: opt.mqtt_base_topic,
     };

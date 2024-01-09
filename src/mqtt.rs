@@ -15,6 +15,8 @@ pub struct MqttConfig {
     pub server: String,
     pub port: u16,
     pub client_id: String,
+    pub user: String,
+    pub password: String,
 }
 
 pub struct MqttData {
@@ -39,6 +41,9 @@ impl MqttConnection {
         let mut mqttoptions = MqttOptions::new(cfg.client_id, cfg.server, cfg.port);
         mqttoptions.set_clean_start(true);
         mqttoptions.set_keep_alive(Duration::from_secs(180));
+        if !cfg.user.is_empty() {
+            mqttoptions.set_credentials(cfg.user, cfg.password);
+        }
 
         let (client, eventloop) = AsyncClient::new(mqttoptions, 10);
 
