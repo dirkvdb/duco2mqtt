@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use tokio_modbus::{
-    client::{tcp, Context, Reader},
+    client::{tcp, Context, Reader, Writer},
     Slave,
 };
 
@@ -98,6 +98,17 @@ impl DucoModbusConnection {
             .read_holding_registers(address, 1)
             .await?;
         Ok(result[0])
+    }
+
+    pub async fn write_holding_register(
+        &mut self,
+        address: u16,
+        value: u16,
+    ) -> Result<(), MqttBridgeError> {
+        self.connection()?
+            .write_single_register(address, value)
+            .await?;
+        Ok(())
     }
 
     fn connection(&mut self) -> Result<&mut Context, MqttBridgeError> {

@@ -1,40 +1,18 @@
-use std::fmt::Display;
-use strum::Display;
+use std::str::FromStr;
 
 use crate::{
-    duconodetypes::{NodeType, VentilationPosition},
+    duconodetypes::{HoldingRegister, InputRegister, NodeType, VentilationPosition},
     modbus::DucoModbusConnection,
     mqtt::MqttData,
     MqttBridgeError,
 };
 
-#[derive(Clone, Copy, Display, Debug)]
-#[strum(serialize_all = "snake_case")]
-enum InputRegister {
-    SystemType = 0,
-    //RemainingTimeCurrentVenilationMode = 2,
-    FlowRateVsTargetLevel = 3,
-    //IndoorAirQualityBasedOnRH = 4,
-    IndoorAirQualityBasedOnCO2 = 5,
-    //VentilationStatus = 6,
-    FilterTimeRemaining = 7,
-}
-
-#[derive(Clone, Copy, Display, Debug)]
-#[strum(serialize_all = "snake_case")]
-enum HoldingRegister {
-    VentilationPosition = 0,
-    Identification = 1,
-    SupplyTemperatureTargetZone1 = 2,
-    SupplyTemperatureTargetZone2 = 3,
-}
-
 const UNKNOWN: &str = "UNKNOWN";
 
-fn optional_enum_string<T: Display + num::FromPrimitive>(val: u16) -> String {
+fn optional_enum_string<T: std::string::ToString + num::FromPrimitive>(val: u16) -> String {
     let enum_type: Option<T> = num::FromPrimitive::from_u16(val);
     match enum_type {
-        Some(enum_type) => format!("{enum_type}"),
+        Some(enum_type) => format!("{}", enum_type.to_string()),
         None => String::from(UNKNOWN),
     }
 }
@@ -104,6 +82,10 @@ impl DucoBoxNode {
         }
     }
 
+    pub fn number(&self) -> u16 {
+        self.number
+    }
+
     pub fn create_co2_room_sensor_node(number: u16) -> DucoBoxNode {
         DucoBoxNode {
             number,
@@ -141,6 +123,45 @@ impl DucoBoxNode {
                 }
             }
         }
+    }
+
+    pub async fn process_command(
+        &self,
+        reg: HoldingRegister,
+        value: &str,
+        modbus: &mut DucoModbusConnection,
+    ) -> Result<(), MqttBridgeError> {
+        let register_value;
+        match reg {
+            HoldingRegister::VentilationPosition => {
+                register_value = VentilationPosition::from_str(value).unwrap() as u16;
+            }
+            HoldingRegister::Identification => {
+                register_value = value.parse::<u16>().map_err(|_| {
+                    MqttBridgeError::RuntimeError(format!(
+                        "Identifcation should be an integral value, got {}",
+                        value,
+                    ))
+                })?;
+
+                if register_value > 1 {
+                    return Err(MqttBridgeError::RuntimeError(format!(
+                        "Identifcation should be 0 or 1, got '{}'",
+                        register_value,
+                    )));
+                }
+            }
+            HoldingRegister::SupplyTemperatureTargetZone1 => todo!(),
+            HoldingRegister::SupplyTemperatureTargetZone2 => todo!(),
+        }
+
+        let address = self.number() * 100 + reg as u16;
+        log::info!("Write register address {address} with value: {register_value}");
+        modbus
+            .write_holding_register(address, register_value)
+            .await?;
+
+        Ok(())
     }
 
     pub fn topics_that_need_updating(&mut self) -> Vec<MqttData> {
@@ -213,7 +234,7 @@ impl DucoBoxNode {
         }
     }
 
-    fn register_topic<T: Display>(node_number: u16, reg: T) -> String {
+    fn register_topic<T: std::string::ToString>(node_number: u16, reg: T) -> String {
         format!("node_{}/{}", node_number, reg.to_string())
     }
 

@@ -23,7 +23,7 @@ pub enum NodeType {
     DucoWeatherStation = 39,
 }
 
-#[derive(FromPrimitive, EnumString, Display, Debug)]
+#[derive(FromPrimitive, EnumString, Debug, Display)]
 #[repr(u16)]
 pub enum VentilationPosition {
     AUTO = 0,
@@ -35,4 +35,25 @@ pub enum VentilationPosition {
     Permanent2 = 9,
     Permanent3 = 10,
     Unknown = 11,
+}
+
+#[derive(Clone, Copy, EnumString, Display, Debug)]
+#[strum(serialize_all = "snake_case")]
+pub enum InputRegister {
+    SystemType = 0,
+    //RemainingTimeCurrentVenilationMode = 2,
+    FlowRateVsTargetLevel = 3,
+    //IndoorAirQualityBasedOnRH = 4,
+    IndoorAirQualityBasedOnCO2 = 5,
+    //VentilationStatus = 6,
+    FilterTimeRemaining = 7,
+}
+
+#[derive(Clone, Copy, EnumString, Display, Debug)]
+#[strum(serialize_all = "snake_case")]
+pub enum HoldingRegister {
+    VentilationPosition = 0,
+    Identification = 1,
+    SupplyTemperatureTargetZone1 = 2,
+    SupplyTemperatureTargetZone2 = 3,
 }
