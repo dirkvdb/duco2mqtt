@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use rumqttc::v5::{
     mqttbytes::{
-        v5::{ConnectReturnCode, Packet},
+        v5::{ConnectReturnCode, LastWill, Packet},
         QoS,
     },
     AsyncClient, Event, EventLoop, MqttOptions,
@@ -17,6 +17,7 @@ pub struct MqttConfig {
     pub client_id: String,
     pub user: String,
     pub password: String,
+    pub base_topic: String,
 }
 
 pub struct MqttData {
@@ -27,6 +28,7 @@ pub struct MqttData {
 pub struct MqttConnection {
     client: AsyncClient,
     eventloop: EventLoop,
+    base_topic: String,
 }
 
 fn from_mqtt_string(stream: &bytes::Bytes) -> Result<String, MqttBridgeError> {
@@ -36,24 +38,43 @@ fn from_mqtt_string(stream: &bytes::Bytes) -> Result<String, MqttBridgeError> {
     }
 }
 
+const OFFLINE_PAYLOAD: &str = "offline";
+const ONLINE_PAYLOAD: &str = "online";
+
+fn state_topic(base_topic: &String) -> String {
+    format!("{}/state", base_topic)
+}
+
 impl MqttConnection {
     pub fn new(cfg: MqttConfig) -> MqttConnection {
         let mut mqttoptions = MqttOptions::new(cfg.client_id, cfg.server, cfg.port);
         mqttoptions.set_clean_start(true);
         mqttoptions.set_keep_alive(Duration::from_secs(180));
+        mqttoptions.set_last_will(LastWill::new(
+            state_topic(&cfg.base_topic),
+            OFFLINE_PAYLOAD,
+            QoS::AtLeastOnce,
+            true,
+            None,
+        ));
+
         if !cfg.user.is_empty() {
             mqttoptions.set_credentials(cfg.user, cfg.password);
         }
 
-        let (client, eventloop) = AsyncClient::new(mqttoptions, 10);
+        let (client, eventloop) = AsyncClient::new(mqttoptions, 100);
 
         log::info!("MQTT connection created");
-        MqttConnection { client, eventloop }
+        MqttConnection {
+            client,
+            eventloop,
+            base_topic: cfg.base_topic,
+        }
     }
 
     pub async fn poll(&mut self) -> Result<Option<MqttData>, MqttBridgeError> {
         if let Ok(msg) = self.eventloop.poll().await {
-            return self.handle_mqtt_message(msg);
+            return self.handle_mqtt_message(msg).await;
         }
 
         Ok(None)
@@ -66,19 +87,45 @@ impl MqttConnection {
             .await?)
     }
 
-    fn handle_mqtt_message(&mut self, ev: Event) -> Result<Option<MqttData>, MqttBridgeError> {
+    async fn subscribe_to_commands(&mut self) -> Result<(), MqttBridgeError> {
+        let cmd_subscription_topic = format!("{}/+/cmnd/+", self.base_topic);
+        self.client
+            .subscribe(cmd_subscription_topic, QoS::ExactlyOnce)
+            .await?;
+        Ok(())
+    }
+
+    async fn publish_online(&mut self) -> Result<(), MqttBridgeError> {
+        self.client
+            .publish(
+                state_topic(&self.base_topic),
+                QoS::AtLeastOnce,
+                true,
+                ONLINE_PAYLOAD,
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    async fn handle_mqtt_message(
+        &mut self,
+        ev: Event,
+    ) -> Result<Option<MqttData>, MqttBridgeError> {
         match ev {
             Event::Incoming(event) => match event {
                 Packet::ConnAck(data) => {
-                    if !data.session_present {
-                        if data.code == ConnectReturnCode::Success {
-                            log::info!("Subscribe to mqtt command data");
-                            //self.subscribe_to_data().await?;
+                    if data.code == ConnectReturnCode::Success {
+                        if !data.session_present {
+                            log::info!("Subscribe to mqtt commands");
+                            self.subscribe_to_commands().await?;
                         } else {
-                            log::error!("MQTT connection refused: {:?}", data.code);
+                            log::debug!("Session still active, no need to resubsribe");
                         }
+
+                        self.publish_online().await?;
                     } else {
-                        log::debug!("Session still active, no need to resubsribe");
+                        log::error!("MQTT connection refused: {:?}", data.code);
                     }
                 }
                 Packet::Publish(publ) => {

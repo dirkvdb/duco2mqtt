@@ -9,7 +9,6 @@ use tokio::time;
 pub struct DucoMqttBridgeConfig {
     pub modbus_config: ModbusConfig,
     pub mqtt_config: MqttConfig,
-    pub mqtt_base_topic: String,
 }
 
 pub struct DucoMqttBridge {
@@ -21,22 +20,23 @@ pub struct DucoMqttBridge {
 
 impl DucoMqttBridge {
     pub fn new(cfg: DucoMqttBridgeConfig) -> DucoMqttBridge {
+        let mqtt_base_topic = cfg.mqtt_config.base_topic.clone();
         DucoMqttBridge {
             mqtt: MqttConnection::new(cfg.mqtt_config),
             modbus_cfg: cfg.modbus_config,
             nodes: Vec::new(),
-            mqtt_base_topic: cfg.mqtt_base_topic,
+            mqtt_base_topic,
         }
     }
 
     pub async fn run(mut self) -> Result<(), MqttBridgeError> {
-        let mut interval = time::interval(time::Duration::from_secs(60));
+        let mut interval = time::interval(self.modbus_cfg.poll_interval);
 
         loop {
             tokio::select! {
                 mqtt_msg = self.mqtt.poll() => {
                     if let Ok(Some(msg)) = mqtt_msg {
-                        log::debug!("Mqtt data received: {}", msg.topic);
+                        log::debug!("MQTT cmnd: {} {}", msg.topic, msg.payload);
                     }
                 }
                 _ = interval.tick() => {
@@ -81,8 +81,7 @@ impl DucoMqttBridge {
             for mut mqtt_data in node.topics_that_need_updating() {
                 mqtt_data.topic = format!("{}/{}", self.mqtt_base_topic, mqtt_data.topic);
                 log::debug!("{}: {}", mqtt_data.topic, mqtt_data.payload);
-                //First check topic names
-                //self.mqtt.publish(mqtt_data).await?;
+                self.mqtt.publish(mqtt_data).await?;
             }
         }
 

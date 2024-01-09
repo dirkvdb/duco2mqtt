@@ -10,16 +10,27 @@ use duco2mqtt::{
 use env_logger::{Env, TimestampPrecision};
 
 #[derive(Parser, Debug)]
-#[clap(name = "duco2mqtt", about = "Interface between duco connectivity board and MQTT")]
+#[clap(
+    name = "duco2mqtt",
+    about = "Interface between duco connectivity board and MQTT"
+)]
 struct Opt {
     // set the duco connectivity board address
     #[clap(long = "duco-addr", env = "D2M_DUCO_ADDRESS")]
     duco_addr: String,
 
-    #[clap(long = "duco-modbus-slave-id", env = "D2M_MODBUS_SLAVE_ID", default_value_t = 1)]
+    #[clap(
+        long = "duco-modbus-slave-id",
+        env = "D2M_MODBUS_SLAVE_ID",
+        default_value_t = 1
+    )]
     duco_slave_id: u8,
 
-    #[clap(long = "duco-poll-interval", env = "D2M_POLL_INTERVAL", default_value_t = 60)]
+    #[clap(
+        long = "duco-poll-interval",
+        env = "D2M_POLL_INTERVAL",
+        default_value_t = 60
+    )]
     duco_poll_interval: u64,
 
     // set the mqtt addr
@@ -60,10 +71,10 @@ async fn main() {
             server: opt.mqtt_addr,
             port: opt.mqtt_port,
             client_id: opt.mqtt_client_id,
-            user: opt.mqtt_user,
-            password: opt.mqtt_password,
+            user: opt.mqtt_user.unwrap_or(String::new()),
+            password: opt.mqtt_password.unwrap_or(String::new()),
+            base_topic: opt.mqtt_base_topic,
         },
-        mqtt_base_topic: opt.mqtt_base_topic,
     };
 
     bridge::DucoMqttBridge::new(cfg)

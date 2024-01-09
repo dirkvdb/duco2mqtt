@@ -9,6 +9,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Display, Debug)]
+#[strum(serialize_all = "snake_case")]
 enum InputRegister {
     SystemType = 0,
     //RemainingTimeCurrentVenilationMode = 2,
@@ -20,18 +21,21 @@ enum InputRegister {
 }
 
 #[derive(Clone, Copy, Display, Debug)]
+#[strum(serialize_all = "snake_case")]
 enum HoldingRegister {
     VentilationPosition = 0,
-    //Identification = 1,
+    Identification = 1,
     SupplyTemperatureTargetZone1 = 2,
     SupplyTemperatureTargetZone2 = 3,
 }
+
+const UNKNOWN: &str = "UNKNOWN";
 
 fn optional_enum_string<T: Display + num::FromPrimitive>(val: u16) -> String {
     let enum_type: Option<T> = num::FromPrimitive::from_u16(val);
     match enum_type {
         Some(enum_type) => format!("{enum_type}"),
-        None => String::from("UNKNOWN"),
+        None => String::from(UNKNOWN),
     }
 }
 
@@ -110,6 +114,7 @@ impl DucoBoxNode {
                     RegisterValue::new(),
                 ),
                 Register::Holding(HoldingRegister::VentilationPosition, RegisterValue::new()),
+                Register::Holding(HoldingRegister::Identification, RegisterValue::new()),
             ],
         }
     }
@@ -174,15 +179,19 @@ impl DucoBoxNode {
             match register {
                 Register::Input(reg, val) => {
                     let addr = self.number * 100 + *reg as u16;
-                    val.set(modbus.read_input_register(addr).await.ok());
+                    let register_val = modbus.read_input_register(addr).await;
+                    if let Err(err) = register_val.as_ref() {
+                        log::warn!("Failed to read input register: {err}")
+                    }
+                    val.set(register_val.ok());
                 }
                 Register::Holding(reg, val) => {
-                    val.set(
-                        modbus
-                            .read_holding_register(self.number * 100 + *reg as u16)
-                            .await
-                            .ok(),
-                    );
+                    let addr = self.number * 100 + *reg as u16;
+                    let register_val = modbus.read_holding_register(addr).await;
+                    if let Err(err) = register_val.as_ref() {
+                        log::warn!("Failed to read holding register: {err}")
+                    }
+                    val.set(register_val.ok());
                 }
             }
         }
@@ -200,7 +209,7 @@ impl DucoBoxNode {
                     format!("{val}")
                 }
             },
-            None => String::from("UNKNOWN"),
+            None => String::from(UNKNOWN),
         }
     }
 
@@ -214,12 +223,13 @@ impl DucoBoxNode {
                 HoldingRegister::VentilationPosition => {
                     optional_enum_string::<VentilationPosition>(val)
                 }
-                HoldingRegister::SupplyTemperatureTargetZone1
+                HoldingRegister::Identification
+                | HoldingRegister::SupplyTemperatureTargetZone1
                 | HoldingRegister::SupplyTemperatureTargetZone2 => {
                     format!("{val}")
                 }
             },
-            None => String::from("UNKNOWN"),
+            None => String::from(UNKNOWN),
         }
     }
 }
