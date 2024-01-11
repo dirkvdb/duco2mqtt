@@ -7,7 +7,7 @@ use crate::{
     MqttBridgeError,
 };
 
-const UNKNOWN: &str = "UNKNOWN";
+pub const UNKNOWN: &str = "UNKNOWN";
 
 fn optional_enum_string<T: std::string::ToString + num::FromPrimitive>(val: u16) -> String {
     let enum_type: Option<T> = num::FromPrimitive::from_u16(val);
@@ -58,27 +58,29 @@ impl RegisterValue {
 
 pub struct DucoBoxNode {
     number: u16,
+    node_type: NodeType,
     registers: Vec<Register>,
 }
 
 impl DucoBoxNode {
-    pub fn create_duco_box_node(number: u16) -> DucoBoxNode {
-        DucoBoxNode {
-            number,
-            registers: vec![
-                Register::Input(InputRegister::SystemType, RegisterValue::new()),
-                Register::Input(InputRegister::FlowRateVsTargetLevel, RegisterValue::new()),
-                Register::Input(InputRegister::FilterTimeRemaining, RegisterValue::new()),
-                Register::Holding(HoldingRegister::VentilationPosition, RegisterValue::new()),
-                Register::Holding(
-                    HoldingRegister::SupplyTemperatureTargetZone1,
-                    RegisterValue::new(),
-                ),
-                Register::Holding(
-                    HoldingRegister::SupplyTemperatureTargetZone2,
-                    RegisterValue::new(),
-                ),
-            ],
+    pub fn create_for_node_type(node_type: NodeType, number: u16) -> Option<DucoBoxNode> {
+        let mut registers = Vec::new();
+        for input_register in DucoBoxNode::supported_input_registers(node_type) {
+            registers.push(Register::Input(input_register, RegisterValue::new()));
+        }
+
+        for holding_register in DucoBoxNode::supported_holding_registers(node_type) {
+            registers.push(Register::Holding(holding_register, RegisterValue::new()));
+        }
+
+        if registers.is_empty() {
+            None
+        } else {
+            Some(DucoBoxNode {
+                number,
+                node_type,
+                registers,
+            })
         }
     }
 
@@ -86,29 +88,33 @@ impl DucoBoxNode {
         self.number
     }
 
-    pub fn create_co2_room_sensor_node(number: u16) -> DucoBoxNode {
-        DucoBoxNode {
-            number,
-            registers: vec![
-                Register::Input(InputRegister::SystemType, RegisterValue::new()),
-                Register::Input(
-                    InputRegister::IndoorAirQualityBasedOnCO2,
-                    RegisterValue::new(),
-                ),
-                Register::Holding(HoldingRegister::VentilationPosition, RegisterValue::new()),
-                Register::Holding(HoldingRegister::Identification, RegisterValue::new()),
+    pub fn node_type(&self) -> NodeType {
+        self.node_type
+    }
+
+    pub fn supported_input_registers(node_type: NodeType) -> Vec<InputRegister> {
+        match node_type {
+            NodeType::DucoBox => vec![
+                InputRegister::SystemType,
+                InputRegister::FlowRateVsTargetLevel,
+                InputRegister::FilterTimeRemaining,
             ],
+            NodeType::CO2RoomSensor => vec![InputRegister::SystemType, InputRegister::IndoorAirQualityBasedOnCO2],
+            NodeType::SensorlessControlValve => vec![InputRegister::SystemType, InputRegister::FlowRateVsTargetLevel],
+            _ => Vec::new(),
         }
     }
 
-    pub fn create_sensorless_control_valve(number: u16) -> DucoBoxNode {
-        DucoBoxNode {
-            number,
-            registers: vec![
-                Register::Input(InputRegister::SystemType, RegisterValue::new()),
-                Register::Input(InputRegister::FlowRateVsTargetLevel, RegisterValue::new()),
-                Register::Holding(HoldingRegister::VentilationPosition, RegisterValue::new()),
+    pub fn supported_holding_registers(node_type: NodeType) -> Vec<HoldingRegister> {
+        match node_type {
+            NodeType::DucoBox => vec![
+                HoldingRegister::VentilationPosition,
+                HoldingRegister::SupplyTemperatureTargetZone1,
+                HoldingRegister::SupplyTemperatureTargetZone2,
             ],
+            NodeType::CO2RoomSensor => vec![HoldingRegister::VentilationPosition, HoldingRegister::Identification],
+            NodeType::SensorlessControlValve => vec![HoldingRegister::VentilationPosition],
+            _ => Vec::new(),
         }
     }
 
@@ -138,10 +144,7 @@ impl DucoBoxNode {
             }
             HoldingRegister::Identification => {
                 register_value = value.parse::<u16>().map_err(|_| {
-                    MqttBridgeError::RuntimeError(format!(
-                        "Identifcation should be an integral value, got {}",
-                        value,
-                    ))
+                    MqttBridgeError::RuntimeError(format!("Identifcation should be an integral value, got {}", value,))
                 })?;
 
                 if register_value > 1 {
@@ -157,9 +160,7 @@ impl DucoBoxNode {
 
         let address = self.number() * 100 + reg as u16;
         log::info!("Write register address {address} with value: {register_value}");
-        modbus
-            .write_holding_register(address, register_value)
-            .await?;
+        modbus.write_holding_register(address, register_value).await?;
 
         Ok(())
     }
@@ -192,10 +193,7 @@ impl DucoBoxNode {
         topics
     }
 
-    pub async fn update_status(
-        &mut self,
-        modbus: &mut DucoModbusConnection,
-    ) -> Result<(), MqttBridgeError> {
+    pub async fn update_status(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), MqttBridgeError> {
         for register in self.registers.iter_mut() {
             match register {
                 Register::Input(reg, val) => {
@@ -241,9 +239,7 @@ impl DucoBoxNode {
     fn holding_register_value_string(reg: HoldingRegister, val: Option<u16>) -> String {
         match val {
             Some(val) => match reg {
-                HoldingRegister::VentilationPosition => {
-                    optional_enum_string::<VentilationPosition>(val)
-                }
+                HoldingRegister::VentilationPosition => optional_enum_string::<VentilationPosition>(val),
                 HoldingRegister::Identification
                 | HoldingRegister::SupplyTemperatureTargetZone1
                 | HoldingRegister::SupplyTemperatureTargetZone2 => {

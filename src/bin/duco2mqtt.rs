@@ -10,27 +10,16 @@ use duco2mqtt::{
 use env_logger::{Env, TimestampPrecision};
 
 #[derive(Parser, Debug)]
-#[clap(
-    name = "duco2mqtt",
-    about = "Interface between duco connectivity board and MQTT"
-)]
+#[clap(name = "duco2mqtt", about = "Interface between duco connectivity board and MQTT")]
 struct Opt {
     // set the duco connectivity board address
     #[clap(long = "duco-addr", env = "D2M_DUCO_ADDRESS")]
     duco_addr: String,
 
-    #[clap(
-        long = "duco-modbus-slave-id",
-        env = "D2M_MODBUS_SLAVE_ID",
-        default_value_t = 1
-    )]
+    #[clap(long = "duco-modbus-slave-id", env = "D2M_MODBUS_SLAVE_ID", default_value_t = 1)]
     duco_slave_id: u8,
 
-    #[clap(
-        long = "duco-poll-interval",
-        env = "D2M_POLL_INTERVAL",
-        default_value_t = 60
-    )]
+    #[clap(long = "duco-poll-interval", env = "D2M_POLL_INTERVAL", default_value_t = 60)]
     duco_poll_interval: u64,
 
     // set the mqtt addr
@@ -51,6 +40,9 @@ struct Opt {
 
     #[clap(long = "mqtt-base-topic", env = "D2M_MQTT_BASE_TOPIC", default_value_t = String::from("ventilation"))]
     mqtt_base_topic: String,
+
+    #[clap(long = "hass-discovery", env = "D2M_HASS_DISCOVERY", default_value_t = false)]
+    hass_discovery: bool,
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -75,6 +67,7 @@ async fn main() {
             password: opt.mqtt_password.unwrap_or(String::new()),
             base_topic: opt.mqtt_base_topic,
         },
+        hass_discovery: opt.hass_discovery,
     };
 
     bridge::DucoMqttBridge::new(cfg)

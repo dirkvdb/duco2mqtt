@@ -1,6 +1,6 @@
-use strum::{Display, EnumString};
+use strum::{Display, EnumString, EnumVariantNames};
 
-#[derive(FromPrimitive, EnumString, Display)]
+#[derive(FromPrimitive, EnumString, Display, Clone, Copy)]
 #[repr(u16)]
 pub enum NodeType {
     Unknown = 0,
@@ -23,17 +23,26 @@ pub enum NodeType {
     DucoWeatherStation = 39,
 }
 
-#[derive(FromPrimitive, EnumString, Debug, Display)]
+#[derive(FromPrimitive, EnumString, EnumVariantNames, Debug, Display)]
 #[repr(u16)]
 pub enum VentilationPosition {
+    #[strum(serialize = "Auto")]
     AUTO = 0,
+    #[strum(serialize = "Manual 1")]
     Manual1 = 4,
+    #[strum(serialize = "Manual 2")]
     Manual2 = 5,
+    #[strum(serialize = "Manual 3")]
     Manual3 = 6,
+    #[strum(serialize = "Not at home")]
     NotAtHome = 7,
+    #[strum(serialize = "Permanent 1")]
     Permanent1 = 8,
+    #[strum(serialize = "Permanent 2")]
     Permanent2 = 9,
+    #[strum(serialize = "Permanent 3")]
     Permanent3 = 10,
+    #[strum(serialize = "Unknown")]
     Unknown = 11,
 }
 

@@ -20,6 +20,7 @@ pub struct MqttConfig {
     pub base_topic: String,
 }
 
+#[derive(Debug)]
 pub struct MqttData {
     pub topic: String,
     pub payload: String,
@@ -89,29 +90,27 @@ impl MqttConnection {
 
     async fn subscribe_to_commands(&mut self) -> Result<(), MqttBridgeError> {
         let cmd_subscription_topic = format!("{}/+/cmnd/+", self.base_topic);
-        self.client
-            .subscribe(cmd_subscription_topic, QoS::ExactlyOnce)
-            .await?;
+        self.client.subscribe(cmd_subscription_topic, QoS::ExactlyOnce).await?;
         Ok(())
     }
 
-    async fn publish_online(&mut self) -> Result<(), MqttBridgeError> {
+    pub async fn publish_online(&mut self) -> Result<(), MqttBridgeError> {
         self.client
-            .publish(
-                state_topic(&self.base_topic),
-                QoS::AtLeastOnce,
-                true,
-                ONLINE_PAYLOAD,
-            )
+            .publish(state_topic(&self.base_topic), QoS::AtLeastOnce, true, ONLINE_PAYLOAD)
             .await?;
 
         Ok(())
     }
 
-    async fn handle_mqtt_message(
-        &mut self,
-        ev: Event,
-    ) -> Result<Option<MqttData>, MqttBridgeError> {
+    pub async fn publish_offline(&mut self) -> Result<(), MqttBridgeError> {
+        self.client
+            .publish(state_topic(&self.base_topic), QoS::AtLeastOnce, true, OFFLINE_PAYLOAD)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn handle_mqtt_message(&mut self, ev: Event) -> Result<Option<MqttData>, MqttBridgeError> {
         match ev {
             Event::Incoming(event) => match event {
                 Packet::ConnAck(data) => {
@@ -122,8 +121,6 @@ impl MqttConnection {
                         } else {
                             log::debug!("Session still active, no need to resubsribe");
                         }
-
-                        self.publish_online().await?;
                     } else {
                         log::error!("MQTT connection refused: {:?}", data.code);
                     }

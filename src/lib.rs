@@ -1,9 +1,10 @@
 #![warn(clippy::unwrap_used)]
 pub mod bridge;
 mod duconodetypes;
+mod duxoboxnode;
+mod hassdiscovery;
 pub mod modbus;
 pub mod mqtt;
-mod duxoboxnode;
 
 extern crate num;
 #[macro_use]
@@ -73,5 +74,11 @@ impl From<rumqttc::v5::ClientError> for MqttBridgeError {
 impl From<rumqttc::v5::ConnectionError> for MqttBridgeError {
     fn from(err: rumqttc::v5::ConnectionError) -> Self {
         MqttBridgeError::RuntimeError(format!("MQTT Connection error: {err}"))
+    }
+}
+
+impl From<serde_json::Error> for MqttBridgeError {
+    fn from(err: serde_json::Error) -> Self {
+        MqttBridgeError::RuntimeError(format!("Serde: {}", err))
     }
 }

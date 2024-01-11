@@ -1,5 +1,6 @@
-use crate::duconodetypes::{HoldingRegister, NodeType};
+use crate::duconodetypes::{HoldingRegister, InputRegister, VentilationPosition};
 use crate::duxoboxnode::DucoBoxNode;
+use crate::hassdiscovery::{create_number_for_register, create_select_for_register, create_sensor_for_register};
 use crate::modbus::{DucoModbusConnection, ModbusConfig};
 use crate::mqtt::{MqttConfig, MqttConnection, MqttData};
 use crate::MqttBridgeError;
@@ -7,9 +8,12 @@ use log;
 use std::str::FromStr;
 use tokio::time;
 
+const HASS_DISCOVERY_TOPIC: &str = "homeassistant";
+
 pub struct DucoMqttBridgeConfig {
     pub modbus_config: ModbusConfig,
     pub mqtt_config: MqttConfig,
+    pub hass_discovery: bool,
 }
 
 pub struct DucoMqttBridge {
@@ -17,6 +21,7 @@ pub struct DucoMqttBridge {
     nodes: Vec<DucoBoxNode>,
     modbus_cfg: ModbusConfig,
     mqtt_base_topic: String,
+    hass_discovery: bool,
 }
 
 impl DucoMqttBridge {
@@ -27,6 +32,7 @@ impl DucoMqttBridge {
             modbus_cfg: cfg.modbus_config,
             nodes: Vec::new(),
             mqtt_base_topic,
+            hass_discovery: cfg.hass_discovery,
         }
     }
 
@@ -48,6 +54,9 @@ impl DucoMqttBridge {
                         log::error!("Failed to update status: {err}");
                         self.reset_nodes();
                         let _ = self.publish_nodes().await;
+                        let _ = self.mqtt.publish_offline().await;
+                    } else {
+                        let _ = self.mqtt.publish_online().await;
                     }
                 }
             }
@@ -61,6 +70,18 @@ impl DucoMqttBridge {
 
         if self.nodes.is_empty() {
             self.discover_nodes(&mut modbus).await?;
+            if self.hass_discovery {
+                for node in self.nodes.iter() {
+                    if let Ok(mqtt_data) = DucoMqttBridge::create_home_assistant_descriptions_for_node(
+                        &node,
+                        &self.mqtt_base_topic.as_str(),
+                    ) {
+                        for md in mqtt_data {
+                            self.mqtt.publish(md).await?;
+                        }
+                    }
+                }
+            }
         }
 
         self.update_nodes(&mut modbus).await?;
@@ -115,7 +136,7 @@ impl DucoMqttBridge {
             modbus.connect(&self.modbus_cfg).await?;
             let node = self.node_with_number(node_nr)?;
             node.process_command(reg, msg.payload.as_str(), &mut modbus).await?;
-            node.update_status(&mut modbus).await?;
+            self.update_nodes(&mut modbus).await?;
 
             return Ok(());
         }
@@ -152,6 +173,92 @@ impl DucoMqttBridge {
         }
     }
 
+    fn create_home_assistant_descriptions_for_node(
+        node: &DucoBoxNode,
+        base_topic: &str,
+    ) -> Result<Vec<MqttData>, MqttBridgeError> {
+        let mut topics = Vec::new();
+        for register in DucoBoxNode::supported_holding_registers(node.node_type()) {
+            match register {
+                HoldingRegister::VentilationPosition => {
+                    let mut select = create_select_for_register::<VentilationPosition, HoldingRegister>(
+                        node.number(),
+                        base_topic,
+                        register.to_string().as_str(),
+                        register,
+                    );
+
+                    select.icon = Some(String::from("mdi:fan"));
+
+                    topics.push(MqttData {
+                        topic: format!("{}/select/{}/config", HASS_DISCOVERY_TOPIC, select.unique_id),
+                        payload: serde_json::to_string(&select)?,
+                    })
+                }
+                HoldingRegister::Identification => {
+                    let mut number =
+                        create_number_for_register(node.number(), base_topic, register.to_string().as_str(), register);
+
+                    number.min = Some(0);
+                    number.max = Some(1);
+                    number.icon = Some(String::from("mdi:led-on"));
+
+                    topics.push(MqttData {
+                        topic: format!("{}/number/{}/config", HASS_DISCOVERY_TOPIC, number.unique_id),
+                        payload: serde_json::to_string(&number)?,
+                    })
+                }
+                HoldingRegister::SupplyTemperatureTargetZone1 | HoldingRegister::SupplyTemperatureTargetZone2 => {
+                    let mut sensor =
+                        create_number_for_register(node.number(), base_topic, register.to_string().as_str(), register);
+
+                    sensor.device_class = Some(String::from("temperature"));
+                    sensor.min = Some(0);
+                    sensor.max = Some(400);
+                    sensor.unit_of_measurement = Some(String::from("0.1°C"));
+
+                    topics.push(MqttData {
+                        topic: format!("{}/number/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
+                        payload: serde_json::to_string(&sensor)?,
+                    });
+
+                    log::debug!("{:?}", topics.last().unwrap());
+                }
+            }
+        }
+
+        for register in DucoBoxNode::supported_input_registers(node.node_type()) {
+            let mut sensor =
+                create_sensor_for_register(node.number(), base_topic, register.to_string().as_str(), register);
+            sensor.state_class = Some(String::from("measurement"));
+
+            match register {
+                InputRegister::FlowRateVsTargetLevel => {
+                    sensor.unit_of_measurement = Some(String::from("%"));
+                    sensor.icon = Some(String::from("mdi:fan-clock"));
+                }
+                InputRegister::IndoorAirQualityBasedOnCO2 => {
+                    sensor.unit_of_measurement = Some(String::from("%"));
+                    sensor.icon = Some(String::from("mdi:molecule-co2"));
+                }
+                InputRegister::FilterTimeRemaining => {
+                    sensor.unit_of_measurement = Some(String::from("days"));
+                    sensor.icon = Some(String::from("mdi:calendar-clock"));
+                }
+                _ => {
+                    continue;
+                }
+            }
+
+            topics.push(MqttData {
+                topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
+                payload: serde_json::to_string(&sensor)?,
+            })
+        }
+
+        Ok(topics)
+    }
+
     async fn discover_nodes(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), MqttBridgeError> {
         self.nodes.clear();
 
@@ -173,32 +280,11 @@ impl DucoMqttBridge {
         for number in node_indexes {
             let node_type_nr = modbus.read_input_register(number * 100).await?;
             if let Some(node_type) = num::FromPrimitive::from_u16(node_type_nr) {
-                match node_type {
-                    NodeType::DucoBox => {
-                        self.nodes.push(DucoBoxNode::create_duco_box_node(number));
-                    }
-                    NodeType::Unknown => todo!(),
-                    NodeType::RemoteControlRFBAT => todo!(),
-                    NodeType::RemoteControlRFWired => todo!(),
-                    NodeType::HumidityRoomSensor => todo!(),
-                    NodeType::CO2RoomSensor => self.nodes.push(DucoBoxNode::create_co2_room_sensor_node(number)),
-                    NodeType::SensorlessControlValve => {
-                        self.nodes.push(DucoBoxNode::create_sensorless_control_valve(number))
-                    }
-                    NodeType::HumidityControlValve => todo!(),
-                    NodeType::CO2ControlValve => todo!(),
-                    NodeType::SwitchSensor => todo!(),
-                    NodeType::ControlUnit => todo!(),
-                    NodeType::CO2RHControlValve => todo!(),
-                    NodeType::RemoteControlSunControlRFWired => todo!(),
-                    NodeType::RemoteControlNightventRFWired => todo!(),
-                    NodeType::ExternalMultiZoneValve => todo!(),
-                    NodeType::HumidityBoxSensor => todo!(),
-                    NodeType::CO2BoxSensors => todo!(),
-                    NodeType::DucoWeatherStation => todo!(),
+                if let Some(node) = DucoBoxNode::create_for_node_type(node_type, number) {
+                    self.nodes.push(node);
+                } else {
+                    log::warn!("Node {node_type} support not implemented");
                 }
-            } else {
-                log::debug!("Node {} has unsupported node type '{}', ignoring", number, node_type_nr);
             }
         }
 
