@@ -49,7 +49,7 @@ pub enum InputRegister {
     FilterTimeRemaining = 7,
 }
 
-#[derive(Clone, Copy, EnumString, Display, Debug)]
+#[derive(Clone, Copy, EnumString, Display, Debug, PartialEq)]
 #[strum(serialize_all = "snake_case")]
 pub enum HoldingRegister {
     VentilationPosition = 0,

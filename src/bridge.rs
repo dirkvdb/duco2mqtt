@@ -205,3 +205,38 @@ impl DucoMqttBridge {
         Ok(())
     }
 }
+
+// Test for parsing node topics
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_node_number_for_node_name() {
+        assert_eq!(DucoMqttBridge::node_number_for_node_name("node_1").unwrap(), 1);
+        assert_eq!(DucoMqttBridge::node_number_for_node_name("node_2").unwrap(), 2);
+        assert_eq!(DucoMqttBridge::node_number_for_node_name("node_3").unwrap(), 3);
+        assert_eq!(DucoMqttBridge::node_number_for_node_name("node_67").unwrap(), 67);
+        assert_eq!(DucoMqttBridge::node_number_for_node_name("node_68").unwrap(), 68);
+    }
+
+    #[test]
+    fn test_node_number_command_from_topic() {
+        assert_eq!(
+            DucoMqttBridge::node_number_cmd_from_topic("node_1/cmnd/ventilation_position").unwrap(),
+            (1, HoldingRegister::VentilationPosition)
+        );
+        assert_eq!(
+            DucoMqttBridge::node_number_cmd_from_topic("node_2/cmnd/identification").unwrap(),
+            (2, HoldingRegister::Identification)
+        );
+        assert_eq!(
+            DucoMqttBridge::node_number_cmd_from_topic("node_2/cmnd/supply_temperature_target_zone1").unwrap(),
+            (2, HoldingRegister::SupplyTemperatureTargetZone1)
+        );
+        assert_eq!(
+            DucoMqttBridge::node_number_cmd_from_topic("node_2/cmnd/supply_temperature_target_zone2").unwrap(),
+            (2, HoldingRegister::SupplyTemperatureTargetZone2)
+        );
+    }
+}
