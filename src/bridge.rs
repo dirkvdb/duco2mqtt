@@ -73,18 +73,16 @@ impl DucoMqttBridge {
         if let Some(node) = self.nodes.iter_mut().find(|x| x.number() == nr) {
             Ok(node)
         } else {
-            Err(MqttBridgeError::RuntimeError(format!(
-                "No node with id '{nr}'"
-            )))
+            Err(MqttBridgeError::RuntimeError(format!("No node with id '{nr}'")))
         }
     }
 
     fn node_number_for_node_name(topic: &str) -> Result<u16, MqttBridgeError> {
         let parts: Vec<&str> = topic.split('_').collect();
         if parts.len() == 2 && parts[0] == "node" {
-            return parts[1].parse().map_err(|_| {
-                MqttBridgeError::RuntimeError(format!("Invalid node number '{}'", parts[1]))
-            });
+            return parts[1]
+                .parse()
+                .map_err(|_| MqttBridgeError::RuntimeError(format!("Invalid node number '{}'", parts[1])));
         }
 
         Err(MqttBridgeError::RuntimeError(format!(
@@ -97,9 +95,8 @@ impl DucoMqttBridge {
         let topics: Vec<&str> = topic.split('/').collect();
         if topics.len() == 3 && topics[1] == "cmnd" {
             let node = DucoMqttBridge::node_number_for_node_name(topics[0])?;
-            let holding_register = HoldingRegister::from_str(topics[2]).map_err(|_| {
-                MqttBridgeError::RuntimeError(format!("Invalid command : '{}'", topics[0]))
-            })?;
+            let holding_register = HoldingRegister::from_str(topics[2])
+                .map_err(|_| MqttBridgeError::RuntimeError(format!("Invalid command : '{}'", topics[0])))?;
 
             return Ok((node, holding_register));
         }
@@ -116,9 +113,9 @@ impl DucoMqttBridge {
 
             let mut modbus = DucoModbusConnection::new();
             modbus.connect(&self.modbus_cfg).await?;
-            self.node_with_number(node_nr)?
-                .process_command(reg, msg.payload.as_str(), &mut modbus)
-                .await?;
+            let node = self.node_with_number(node_nr)?;
+            node.process_command(reg, msg.payload.as_str(), &mut modbus).await?;
+            node.update_status(&mut modbus).await?;
 
             return Ok(());
         }
@@ -129,10 +126,7 @@ impl DucoMqttBridge {
         )))
     }
 
-    async fn update_nodes(
-        &mut self,
-        modbus: &mut DucoModbusConnection,
-    ) -> Result<(), MqttBridgeError> {
+    async fn update_nodes(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), MqttBridgeError> {
         for node in self.nodes.iter_mut() {
             node.update_status(modbus).await?;
         }
@@ -158,10 +152,7 @@ impl DucoMqttBridge {
         }
     }
 
-    async fn discover_nodes(
-        &mut self,
-        modbus: &mut DucoModbusConnection,
-    ) -> Result<(), MqttBridgeError> {
+    async fn discover_nodes(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), MqttBridgeError> {
         self.nodes.clear();
 
         let mut node_indexes: Vec<u16> = Vec::new();
@@ -190,12 +181,10 @@ impl DucoMqttBridge {
                     NodeType::RemoteControlRFBAT => todo!(),
                     NodeType::RemoteControlRFWired => todo!(),
                     NodeType::HumidityRoomSensor => todo!(),
-                    NodeType::CO2RoomSensor => self
-                        .nodes
-                        .push(DucoBoxNode::create_co2_room_sensor_node(number)),
-                    NodeType::SensorlessControlValve => self
-                        .nodes
-                        .push(DucoBoxNode::create_sensorless_control_valve(number)),
+                    NodeType::CO2RoomSensor => self.nodes.push(DucoBoxNode::create_co2_room_sensor_node(number)),
+                    NodeType::SensorlessControlValve => {
+                        self.nodes.push(DucoBoxNode::create_sensorless_control_valve(number))
+                    }
                     NodeType::HumidityControlValve => todo!(),
                     NodeType::CO2ControlValve => todo!(),
                     NodeType::SwitchSensor => todo!(),
@@ -209,11 +198,7 @@ impl DucoMqttBridge {
                     NodeType::DucoWeatherStation => todo!(),
                 }
             } else {
-                log::debug!(
-                    "Node {} has unsupported node type '{}', ignoring",
-                    number,
-                    node_type_nr
-                );
+                log::debug!("Node {} has unsupported node type '{}', ignoring", number, node_type_nr);
             }
         }
 
