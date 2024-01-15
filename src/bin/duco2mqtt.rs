@@ -9,6 +9,9 @@ use duco2mqtt::{
 };
 use env_logger::{Env, TimestampPrecision};
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const PACKAGE: &str = env!("CARGO_PKG_NAME");
+
 #[derive(Parser, Debug)]
 #[clap(name = "duco2mqtt", about = "Interface between duco connectivity board and MQTT")]
 struct Opt {
@@ -52,6 +55,8 @@ async fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("info"))
         .format_timestamp(Some(TimestampPrecision::Millis))
         .init();
+
+    log::info!("{} version {}", PACKAGE, VERSION);
 
     let cfg = DucoMqttBridgeConfig {
         modbus_config: ModbusConfig {
