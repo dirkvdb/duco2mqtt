@@ -93,7 +93,6 @@ impl DucoMqttBridge {
 
         self.update_nodes(modbus).await?;
         self.publish_nodes().await?;
-        modbus.disconnect().await?;
         Ok(())
     }
 
@@ -144,7 +143,7 @@ impl DucoMqttBridge {
             let node = self.node_with_number(node_nr)?;
             node.process_command(reg, msg.payload.as_str(), &mut modbus).await?;
             self.update_nodes(&mut modbus).await?;
-            modbus.disconnect().await?;
+            self.publish_nodes().await?;
             return Ok(());
         }
 
