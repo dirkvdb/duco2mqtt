@@ -53,7 +53,7 @@ async fn main() {
     let opt = Opt::parse();
 
     env_logger::Builder::from_env(Env::default().default_filter_or("info"))
-        .format_timestamp(Some(TimestampPrecision::Millis))
+        .format_timestamp(None)
         .init();
 
     log::info!("{} version {}", PACKAGE, VERSION);
