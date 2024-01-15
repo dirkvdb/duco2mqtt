@@ -38,6 +38,7 @@ impl DucoMqttBridge {
 
     pub async fn run(mut self) -> Result<(), MqttBridgeError> {
         let mut interval = time::interval(self.modbus_cfg.poll_interval);
+        let mut modbus = DucoModbusConnection::new();
 
         loop {
             tokio::select! {
@@ -50,7 +51,15 @@ impl DucoMqttBridge {
                     }
                 }
                 _ = interval.tick() => {
-                    if let Err(err) = self.poll_modbus().await {
+                    if !modbus.check_connection().await {
+                        log::info!("Reconnecting to modbus");
+                        if let Err(err) = modbus.connect(&self.modbus_cfg).await {
+                            log::error!("Failed to connect to modbus: {err}");
+                            continue;
+                        }
+                    }
+
+                    if let Err(err) = self.poll_modbus(&mut modbus).await {
                         log::error!("Failed to update status: {err}");
                         self.reset_nodes();
                         let _ = self.publish_nodes().await;
@@ -63,13 +72,11 @@ impl DucoMqttBridge {
         }
     }
 
-    async fn poll_modbus(&mut self) -> Result<(), MqttBridgeError> {
+    async fn poll_modbus(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), MqttBridgeError> {
         log::debug!("Update modbus values");
-        let mut modbus = DucoModbusConnection::new();
-        modbus.connect(&self.modbus_cfg).await?;
 
         if self.nodes.is_empty() {
-            self.discover_nodes(&mut modbus).await?;
+            self.discover_nodes(modbus).await?;
             if self.hass_discovery {
                 for node in self.nodes.iter() {
                     if let Ok(mqtt_data) = DucoMqttBridge::create_home_assistant_descriptions_for_node(
@@ -84,7 +91,7 @@ impl DucoMqttBridge {
             }
         }
 
-        self.update_nodes(&mut modbus).await?;
+        self.update_nodes(modbus).await?;
         self.publish_nodes().await?;
         modbus.disconnect().await?;
         Ok(())
