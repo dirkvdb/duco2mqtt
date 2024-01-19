@@ -99,7 +99,11 @@ impl DucoBoxNode {
                 InputRegister::FlowRateVsTargetLevel,
                 InputRegister::FilterTimeRemaining,
             ],
-            NodeType::CO2RoomSensor => vec![InputRegister::SystemType, InputRegister::IndoorAirQualityBasedOnCO2],
+            NodeType::CO2RoomSensor => vec![
+                InputRegister::SystemType,
+                InputRegister::RemainingTimeCurrentVenilationMode,
+                InputRegister::IndoorAirQualityBasedOnCO2,
+            ],
             NodeType::SensorlessControlValve => vec![
                 InputRegister::SystemType,
                 InputRegister::RemainingTimeCurrentVenilationMode,
@@ -202,9 +206,14 @@ impl DucoBoxNode {
             match register {
                 Register::Input(reg, val) => {
                     let addr = self.number * 100 + *reg as u16;
-                    let register_val = modbus.read_input_register(addr).await;
+                    let mut register_val = modbus.read_input_register(addr).await;
                     if let Err(err) = register_val.as_ref() {
-                        log::warn!("Failed to read input register: {err}")
+                        if reg == &InputRegister::RemainingTimeCurrentVenilationMode {
+                            // This register can only be read when the ventilation is running in manual mode
+                            register_val = Ok(0);
+                        } else {
+                            log::warn!("Failed to read input register: {err}")
+                        }
                     }
                     val.set(register_val.ok());
                 }

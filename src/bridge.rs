@@ -251,6 +251,10 @@ impl DucoMqttBridge {
                     sensor.unit_of_measurement = Some(String::from("days"));
                     sensor.icon = Some(String::from("mdi:calendar-clock"));
                 }
+                InputRegister::RemainingTimeCurrentVenilationMode => {
+                    sensor.unit_of_measurement = Some(String::from("seconds"));
+                    sensor.icon = Some(String::from("mdi:timer"));
+                }
                 _ => {
                     continue;
                 }

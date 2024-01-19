@@ -46,7 +46,7 @@ pub enum VentilationPosition {
     Unknown = 11,
 }
 
-#[derive(Clone, Copy, EnumString, Display, Debug)]
+#[derive(Clone, Copy, EnumString, Display, Debug, PartialEq)]
 #[strum(serialize_all = "snake_case")]
 pub enum InputRegister {
     SystemType = 0,
