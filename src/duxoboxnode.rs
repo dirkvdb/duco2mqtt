@@ -100,7 +100,11 @@ impl DucoBoxNode {
                 InputRegister::FilterTimeRemaining,
             ],
             NodeType::CO2RoomSensor => vec![InputRegister::SystemType, InputRegister::IndoorAirQualityBasedOnCO2],
-            NodeType::SensorlessControlValve => vec![InputRegister::SystemType, InputRegister::FlowRateVsTargetLevel],
+            NodeType::SensorlessControlValve => vec![
+                InputRegister::SystemType,
+                InputRegister::RemainingTimeCurrentVenilationMode,
+                InputRegister::FlowRateVsTargetLevel,
+            ],
             _ => Vec::new(),
         }
     }
@@ -224,6 +228,7 @@ impl DucoBoxNode {
                 InputRegister::SystemType => optional_enum_string::<NodeType>(val),
                 InputRegister::FlowRateVsTargetLevel
                 | InputRegister::IndoorAirQualityBasedOnCO2
+                | InputRegister::RemainingTimeCurrentVenilationMode
                 | InputRegister::FilterTimeRemaining => {
                     format!("{val}")
                 }

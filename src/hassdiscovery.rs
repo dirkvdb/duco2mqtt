@@ -10,8 +10,8 @@ pub struct Origin {
 impl Origin {
     pub fn duco2mqtt() -> Origin {
         Origin {
-            name: String::from("duco2mqtt"),
-            sw: String::from("1.0.0"),
+            name: String::from(env!("CARGO_PKG_NAME")),
+            sw: String::from(env!("CARGO_PKG_VERSION")),
             url: String::from("https://github.com/dirkvdb/duco2mqtt"),
         }
     }

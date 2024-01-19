@@ -7,7 +7,7 @@ use duco2mqtt::{
     modbus::ModbusConfig,
     mqtt::MqttConfig,
 };
-use env_logger::{Env, TimestampPrecision};
+use env_logger::Env;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const PACKAGE: &str = env!("CARGO_PKG_NAME");

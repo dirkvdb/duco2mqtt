@@ -50,7 +50,7 @@ pub enum VentilationPosition {
 #[strum(serialize_all = "snake_case")]
 pub enum InputRegister {
     SystemType = 0,
-    //RemainingTimeCurrentVenilationMode = 2,
+    RemainingTimeCurrentVenilationMode = 2,
     FlowRateVsTargetLevel = 3,
     //IndoorAirQualityBasedOnRH = 4,
     IndoorAirQualityBasedOnCO2 = 5,
