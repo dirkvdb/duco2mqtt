@@ -2,6 +2,7 @@
 use core::time;
 
 use clap::Parser;
+use clap_verbosity_flag::WarnLevel;
 use duco2mqtt::{
     bridge::{self, DucoMqttBridgeConfig},
     modbus::ModbusConfig,
@@ -15,6 +16,9 @@ const PACKAGE: &str = env!("CARGO_PKG_NAME");
 #[derive(Parser, Debug)]
 #[clap(name = "duco2mqtt", about = "Interface between duco connectivity board and MQTT")]
 struct Opt {
+    #[command(flatten)]
+    verbose: clap_verbosity_flag::Verbosity<WarnLevel>,
+
     // set the duco connectivity board address
     #[clap(long = "duco-addr", env = "D2M_DUCO_ADDRESS")]
     duco_addr: String,
@@ -52,8 +56,9 @@ struct Opt {
 async fn main() {
     let opt = Opt::parse();
 
-    env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+    env_logger::Builder::from_env(Env::default())
         .format_timestamp(None)
+        .filter_level(opt.verbose.log_level_filter())
         .init();
 
     log::info!("{} version {}", PACKAGE, VERSION);
