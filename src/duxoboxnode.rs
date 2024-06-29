@@ -4,7 +4,7 @@ use crate::{
     duconodetypes::{HoldingRegister, InputRegister, NodeType, VentilationPosition},
     modbus::DucoModbusConnection,
     mqtt::MqttData,
-    MqttBridgeError,
+    Error,
 };
 
 pub const UNKNOWN: &str = "UNKNOWN";
@@ -144,7 +144,7 @@ impl DucoBoxNode {
         reg: HoldingRegister,
         value: &str,
         modbus: &mut DucoModbusConnection,
-    ) -> Result<(), MqttBridgeError> {
+    ) -> Result<(), Error> {
         let register_value;
         match reg {
             HoldingRegister::VentilationPosition => {
@@ -152,11 +152,11 @@ impl DucoBoxNode {
             }
             HoldingRegister::Identification => {
                 register_value = value.parse::<u16>().map_err(|_| {
-                    MqttBridgeError::RuntimeError(format!("Identifcation should be an integral value, got {}", value,))
+                    Error::Runtime(format!("Identifcation should be an integral value, got {}", value,))
                 })?;
 
                 if register_value > 1 {
-                    return Err(MqttBridgeError::RuntimeError(format!(
+                    return Err(Error::Runtime(format!(
                         "Identifcation should be 0 or 1, got '{}'",
                         register_value,
                     )));
@@ -201,7 +201,7 @@ impl DucoBoxNode {
         topics
     }
 
-    pub async fn update_status(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), MqttBridgeError> {
+    pub async fn update_status(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), Error> {
         for register in self.registers.iter_mut() {
             match register {
                 Register::Input(reg, val) => {

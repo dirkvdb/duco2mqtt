@@ -5,7 +5,7 @@ use tokio_modbus::{
     Slave,
 };
 
-use crate::MqttBridgeError;
+use crate::Error;
 
 const CONNECTION_TIME: Duration = Duration::from_secs(5);
 
@@ -39,26 +39,21 @@ impl DucoModbusConnection {
         }
     }
 
-    pub async fn connect(&mut self, cfg: &ModbusConfig) -> Result<(), MqttBridgeError> {
+    pub async fn connect(&mut self, cfg: &ModbusConfig) -> Result<(), Error> {
         let socket_addr = format!("{}:502", cfg.slave_address).parse().unwrap();
-        match tokio::time::timeout(
-            CONNECTION_TIME,
-            tcp::connect_slave(socket_addr, Slave(cfg.slave_id)),
-        )
-        .await
-        {
+        match tokio::time::timeout(CONNECTION_TIME, tcp::connect_slave(socket_addr, Slave(cfg.slave_id))).await {
             Ok(ok) => match ok {
                 Ok(context) => self.modbus = Some(context),
                 Err(err) => {
                     self.modbus = None;
-                    return Err(MqttBridgeError::NetworkError(format!(
+                    return Err(Error::Runtime(format!(
                         "Failed to connect to duco modbus server: {err}"
                     )));
                 }
             },
             Err(err) => {
                 self.modbus = None;
-                return Err(MqttBridgeError::NetworkError(format!(
+                return Err(Error::Runtime(format!(
                     "Timeout connecting to duco modbus server ({err})"
                 )));
             }
@@ -67,7 +62,7 @@ impl DucoModbusConnection {
         Ok(())
     }
 
-    pub async fn disconnect(&mut self) -> Result<(), MqttBridgeError> {
+    pub async fn disconnect(&mut self) -> Result<(), Error> {
         if let Some(conn) = self.modbus.as_mut() {
             conn.disconnect().await?;
         }
@@ -75,48 +70,30 @@ impl DucoModbusConnection {
         Ok(())
     }
 
-    pub async fn read_input_register(&mut self, address: u16) -> Result<u16, MqttBridgeError> {
+    pub async fn read_input_register(&mut self, address: u16) -> Result<u16, Error> {
         let result = self.connection()?.read_input_registers(address, 1).await?;
         Ok(result[0])
     }
 
-    pub async fn read_input_registers(
-        &mut self,
-        address: u16,
-        count: u16,
-    ) -> Result<Vec<u16>, MqttBridgeError> {
-        let result = self
-            .connection()?
-            .read_input_registers(address, count)
-            .await?;
+    pub async fn read_input_registers(&mut self, address: u16, count: u16) -> Result<Vec<u16>, Error> {
+        let result = self.connection()?.read_input_registers(address, count).await?;
         Ok(result)
     }
 
-    pub async fn read_holding_register(&mut self, address: u16) -> Result<u16, MqttBridgeError> {
-        let result = self
-            .connection()?
-            .read_holding_registers(address, 1)
-            .await?;
+    pub async fn read_holding_register(&mut self, address: u16) -> Result<u16, Error> {
+        let result = self.connection()?.read_holding_registers(address, 1).await?;
         Ok(result[0])
     }
 
-    pub async fn write_holding_register(
-        &mut self,
-        address: u16,
-        value: u16,
-    ) -> Result<(), MqttBridgeError> {
-        self.connection()?
-            .write_single_register(address, value)
-            .await?;
+    pub async fn write_holding_register(&mut self, address: u16, value: u16) -> Result<(), Error> {
+        self.connection()?.write_single_register(address, value).await?;
         Ok(())
     }
 
-    fn connection(&mut self) -> Result<&mut Context, MqttBridgeError> {
+    fn connection(&mut self) -> Result<&mut Context, Error> {
         match self.modbus.as_mut() {
             Some(ctx) => Ok(ctx),
-            None => Err(MqttBridgeError::RuntimeError(String::from(
-                "Modbus not connected",
-            ))),
+            None => Err(Error::Runtime("Modbus not connected".to_string())),
         }
     }
 }

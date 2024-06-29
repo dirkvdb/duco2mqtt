@@ -8,7 +8,7 @@ use rumqttc::v5::{
     AsyncClient, Event, EventLoop, MqttOptions,
 };
 
-use crate::MqttBridgeError;
+use crate::Error;
 
 #[derive(Clone)]
 pub struct MqttConfig {
@@ -32,10 +32,10 @@ pub struct MqttConnection {
     base_topic: String,
 }
 
-fn from_mqtt_string(stream: &bytes::Bytes) -> Result<String, MqttBridgeError> {
+fn from_mqtt_string(stream: &bytes::Bytes) -> Result<String, Error> {
     match String::from_utf8(stream.to_vec()) {
         Ok(v) => Ok(v),
-        Err(_e) => Err(MqttBridgeError::ParseError),
+        Err(e) => Err(Error::Utf8Error(e.utf8_error())),
     }
 }
 
@@ -73,7 +73,7 @@ impl MqttConnection {
         }
     }
 
-    pub async fn poll(&mut self) -> Result<Option<MqttData>, MqttBridgeError> {
+    pub async fn poll(&mut self) -> Result<Option<MqttData>, Error> {
         if let Ok(msg) = self.eventloop.poll().await {
             return self.handle_mqtt_message(msg).await;
         }
@@ -81,20 +81,20 @@ impl MqttConnection {
         Ok(None)
     }
 
-    pub async fn publish(&mut self, data: MqttData) -> Result<(), MqttBridgeError> {
+    pub async fn publish(&mut self, data: MqttData) -> Result<(), Error> {
         Ok(self
             .client
             .publish(data.topic, QoS::AtLeastOnce, true, data.payload)
             .await?)
     }
 
-    async fn subscribe_to_commands(&mut self) -> Result<(), MqttBridgeError> {
+    async fn subscribe_to_commands(&mut self) -> Result<(), Error> {
         let cmd_subscription_topic = format!("{}/+/cmnd/+", self.base_topic);
         self.client.subscribe(cmd_subscription_topic, QoS::ExactlyOnce).await?;
         Ok(())
     }
 
-    pub async fn publish_online(&mut self) -> Result<(), MqttBridgeError> {
+    pub async fn publish_online(&mut self) -> Result<(), Error> {
         self.client
             .publish(state_topic(&self.base_topic), QoS::AtLeastOnce, true, ONLINE_PAYLOAD)
             .await?;
@@ -102,7 +102,7 @@ impl MqttConnection {
         Ok(())
     }
 
-    pub async fn publish_offline(&mut self) -> Result<(), MqttBridgeError> {
+    pub async fn publish_offline(&mut self) -> Result<(), Error> {
         self.client
             .publish(state_topic(&self.base_topic), QoS::AtLeastOnce, true, OFFLINE_PAYLOAD)
             .await?;
@@ -110,7 +110,7 @@ impl MqttConnection {
         Ok(())
     }
 
-    async fn handle_mqtt_message(&mut self, ev: Event) -> Result<Option<MqttData>, MqttBridgeError> {
+    async fn handle_mqtt_message(&mut self, ev: Event) -> Result<Option<MqttData>, Error> {
         match ev {
             Event::Incoming(event) => match event {
                 Packet::ConnAck(data) => {

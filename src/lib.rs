@@ -1,4 +1,6 @@
 #![warn(clippy::unwrap_used)]
+use thiserror::Error;
+
 pub mod bridge;
 mod duconodetypes;
 mod duxoboxnode;
@@ -10,75 +12,24 @@ extern crate num;
 #[macro_use]
 extern crate num_derive;
 
-use std::{array::TryFromSliceError, fmt, net::AddrParseError, str::Utf8Error};
+use std::{net::AddrParseError, str::Utf8Error};
 
-#[derive(Debug)]
-pub enum MqttBridgeError {
-    NetworkError(String),
-    RuntimeError(String),
-    ParseError,
-}
-
-impl fmt::Display for MqttBridgeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            MqttBridgeError::NetworkError(str) => write!(f, "Network Error {}", str),
-            MqttBridgeError::RuntimeError(str) => write!(f, "Runtime Error {}", str),
-            MqttBridgeError::ParseError => write!(f, "Parse Error"),
-        }
-    }
-}
-
-impl From<std::io::Error> for MqttBridgeError {
-    fn from(err: std::io::Error) -> Self {
-        MqttBridgeError::NetworkError(format!("IO: {}", err))
-    }
-}
-
-impl From<std::num::ParseIntError> for MqttBridgeError {
-    fn from(_: std::num::ParseIntError) -> Self {
-        MqttBridgeError::ParseError
-    }
-}
-
-impl From<String> for MqttBridgeError {
-    fn from(str: String) -> Self {
-        MqttBridgeError::RuntimeError(str)
-    }
-}
-
-impl From<AddrParseError> for MqttBridgeError {
-    fn from(_: AddrParseError) -> Self {
-        MqttBridgeError::NetworkError(String::from("Invalid address"))
-    }
-}
-
-impl From<TryFromSliceError> for MqttBridgeError {
-    fn from(_: TryFromSliceError) -> Self {
-        MqttBridgeError::ParseError
-    }
-}
-
-impl From<Utf8Error> for MqttBridgeError {
-    fn from(_: Utf8Error) -> Self {
-        MqttBridgeError::ParseError
-    }
-}
-
-impl From<rumqttc::v5::ClientError> for MqttBridgeError {
-    fn from(err: rumqttc::v5::ClientError) -> Self {
-        MqttBridgeError::RuntimeError(format!("MQTT Error: {err}"))
-    }
-}
-
-impl From<rumqttc::v5::ConnectionError> for MqttBridgeError {
-    fn from(err: rumqttc::v5::ConnectionError) -> Self {
-        MqttBridgeError::RuntimeError(format!("MQTT Connection error: {err}"))
-    }
-}
-
-impl From<serde_json::Error> for MqttBridgeError {
-    fn from(err: serde_json::Error) -> Self {
-        MqttBridgeError::RuntimeError(format!("Serde: {}", err))
-    }
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Network Error {0}")]
+    Network(#[from] std::io::Error),
+    #[error("Error {0}")]
+    Runtime(String),
+    #[error("Parse error {0}")]
+    ParseError(#[from] std::num::ParseIntError),
+    #[error("Utf8 error {0}")]
+    Utf8Error(#[from] Utf8Error),
+    #[error("Invalid address {0}")]
+    InvalidAddress(#[from] AddrParseError),
+    #[error("MQTT error {0}")]
+    MqttClientError(#[from] rumqttc::v5::ClientError),
+    #[error("MQTT error {0}")]
+    MqttConnectionError(#[from] rumqttc::v5::ConnectionError),
+    #[error("Serialization error {0}")]
+    SerializationError(#[from] serde_json::Error),
 }

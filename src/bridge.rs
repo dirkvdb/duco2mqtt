@@ -3,7 +3,7 @@ use crate::duxoboxnode::DucoBoxNode;
 use crate::hassdiscovery::{create_number_for_register, create_select_for_register, create_sensor_for_register};
 use crate::modbus::{DucoModbusConnection, ModbusConfig};
 use crate::mqtt::{MqttConfig, MqttConnection, MqttData};
-use crate::MqttBridgeError;
+use crate::Error;
 use log;
 use std::str::FromStr;
 use tokio::time;
@@ -36,7 +36,7 @@ impl DucoMqttBridge {
         }
     }
 
-    pub async fn run(mut self) -> Result<(), MqttBridgeError> {
+    pub async fn run(mut self) -> Result<(), Error> {
         let mut interval = time::interval(self.modbus_cfg.poll_interval);
         let mut modbus = DucoModbusConnection::new();
 
@@ -72,7 +72,7 @@ impl DucoMqttBridge {
         }
     }
 
-    async fn poll_modbus(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), MqttBridgeError> {
+    async fn poll_modbus(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), Error> {
         log::debug!("Update modbus values");
 
         if self.nodes.is_empty() {
@@ -96,45 +96,39 @@ impl DucoMqttBridge {
         Ok(())
     }
 
-    fn node_with_number(&mut self, nr: u16) -> Result<&mut DucoBoxNode, MqttBridgeError> {
+    fn node_with_number(&mut self, nr: u16) -> Result<&mut DucoBoxNode, Error> {
         if let Some(node) = self.nodes.iter_mut().find(|x| x.number() == nr) {
             Ok(node)
         } else {
-            Err(MqttBridgeError::RuntimeError(format!("No node with id '{nr}'")))
+            Err(Error::Runtime(format!("No node with id '{nr}'")))
         }
     }
 
-    fn node_number_for_node_name(topic: &str) -> Result<u16, MqttBridgeError> {
+    fn node_number_for_node_name(topic: &str) -> Result<u16, Error> {
         let parts: Vec<&str> = topic.split('_').collect();
         if parts.len() == 2 && parts[0] == "node" {
             return parts[1]
                 .parse()
-                .map_err(|_| MqttBridgeError::RuntimeError(format!("Invalid node number '{}'", parts[1])));
+                .map_err(|_| Error::Runtime(format!("Invalid node number '{}'", parts[1])));
         }
 
-        Err(MqttBridgeError::RuntimeError(format!(
-            "Invalid node topic provided: {}",
-            topic
-        )))
+        Err(Error::Runtime(format!("Invalid node topic provided: {}", topic)))
     }
 
-    fn node_number_cmd_from_topic(topic: &str) -> Result<(u16, HoldingRegister), MqttBridgeError> {
+    fn node_number_cmd_from_topic(topic: &str) -> Result<(u16, HoldingRegister), Error> {
         let topics: Vec<&str> = topic.split('/').collect();
         if topics.len() == 3 && topics[1] == "cmnd" {
             let node = DucoMqttBridge::node_number_for_node_name(topics[0])?;
             let holding_register = HoldingRegister::from_str(topics[2])
-                .map_err(|_| MqttBridgeError::RuntimeError(format!("Invalid command : '{}'", topics[0])))?;
+                .map_err(|_| Error::Runtime(format!("Invalid command : '{}'", topics[0])))?;
 
             return Ok((node, holding_register));
         }
 
-        Err(MqttBridgeError::RuntimeError(format!(
-            "Invalid node topic provided: {}",
-            topic
-        )))
+        Err(Error::Runtime(format!("Invalid node topic provided: {}", topic)))
     }
 
-    async fn handle_node_command(&mut self, msg: &MqttData) -> Result<(), MqttBridgeError> {
+    async fn handle_node_command(&mut self, msg: &MqttData) -> Result<(), Error> {
         if let Some(path) = msg.topic.strip_prefix(self.mqtt_base_topic.as_str()) {
             let (node_nr, reg) = DucoMqttBridge::node_number_cmd_from_topic(path)?;
 
@@ -147,13 +141,10 @@ impl DucoMqttBridge {
             return Ok(());
         }
 
-        Err(MqttBridgeError::RuntimeError(format!(
-            "Unexpected command path: {}",
-            msg.topic
-        )))
+        Err(Error::Runtime(format!("Unexpected command path: {}", msg.topic)))
     }
 
-    async fn update_nodes(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), MqttBridgeError> {
+    async fn update_nodes(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), Error> {
         for node in self.nodes.iter_mut() {
             node.update_status(modbus).await?;
         }
@@ -161,7 +152,7 @@ impl DucoMqttBridge {
         Ok(())
     }
 
-    async fn publish_nodes(&mut self) -> Result<(), MqttBridgeError> {
+    async fn publish_nodes(&mut self) -> Result<(), Error> {
         for node in self.nodes.iter_mut() {
             for mut mqtt_data in node.topics_that_need_updating() {
                 mqtt_data.topic = format!("{}{}", self.mqtt_base_topic, mqtt_data.topic);
@@ -182,7 +173,7 @@ impl DucoMqttBridge {
     fn create_home_assistant_descriptions_for_node(
         node: &DucoBoxNode,
         base_topic: &str,
-    ) -> Result<Vec<MqttData>, MqttBridgeError> {
+    ) -> Result<Vec<MqttData>, Error> {
         let mut topics = Vec::new();
         for register in DucoBoxNode::supported_holding_registers(node.node_type()) {
             match register {
@@ -269,7 +260,7 @@ impl DucoMqttBridge {
         Ok(topics)
     }
 
-    async fn discover_nodes(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), MqttBridgeError> {
+    async fn discover_nodes(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), Error> {
         self.nodes.clear();
 
         let mut node_indexes: Vec<u16> = Vec::new();
