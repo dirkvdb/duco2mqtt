@@ -28,7 +28,7 @@ impl DucoModbusConnection {
     pub async fn check_connection(&mut self) -> bool {
         match self.modbus.as_mut() {
             Some(modbus) => {
-                if let Err(_) = modbus.read_input_registers(0, 1).await {
+                if (modbus.read_input_registers(0, 1).await).is_err() {
                     self.modbus = None;
                     false
                 } else {
@@ -40,7 +40,7 @@ impl DucoModbusConnection {
     }
 
     pub async fn connect(&mut self, cfg: &ModbusConfig) -> Result<(), Error> {
-        let socket_addr = format!("{}:502", cfg.slave_address).parse().unwrap();
+        let socket_addr = format!("{}:502", cfg.slave_address).parse()?;
         match tokio::time::timeout(CONNECTION_TIME, tcp::connect_slave(socket_addr, Slave(cfg.slave_id))).await {
             Ok(ok) => match ok {
                 Ok(context) => self.modbus = Some(context),
@@ -95,5 +95,11 @@ impl DucoModbusConnection {
             Some(ctx) => Ok(ctx),
             None => Err(Error::Runtime("Modbus not connected".to_string())),
         }
+    }
+}
+
+impl Default for DucoModbusConnection {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -12,7 +12,7 @@ pub const UNKNOWN: &str = "UNKNOWN";
 fn optional_enum_string<T: std::string::ToString + num::FromPrimitive>(val: u16) -> String {
     let enum_type: Option<T> = num::FromPrimitive::from_u16(val);
     match enum_type {
-        Some(enum_type) => format!("{}", enum_type.to_string()),
+        Some(enum_type) => enum_type.to_string(),
         None => String::from(UNKNOWN),
     }
 }

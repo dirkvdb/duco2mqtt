@@ -79,10 +79,9 @@ impl DucoMqttBridge {
             self.discover_nodes(modbus).await?;
             if self.hass_discovery {
                 for node in self.nodes.iter() {
-                    if let Ok(mqtt_data) = DucoMqttBridge::create_home_assistant_descriptions_for_node(
-                        &node,
-                        &self.mqtt_base_topic.as_str(),
-                    ) {
+                    if let Ok(mqtt_data) =
+                        DucoMqttBridge::create_home_assistant_descriptions_for_node(node, self.mqtt_base_topic.as_str())
+                    {
                         for md in mqtt_data {
                             self.mqtt.publish(md).await?;
                         }
@@ -266,16 +265,13 @@ impl DucoMqttBridge {
         let mut node_indexes: Vec<u16> = Vec::new();
 
         let regs = modbus.read_input_registers(0, 9).await?;
-        let mut index = 0;
-        for reg in regs {
+        for (index, reg) in regs.into_iter().enumerate() {
             for i in 0..16 {
                 // Check if the bit at position i is 1
                 if (reg & (1 << i)) != 0 {
-                    node_indexes.push((index * 16) + i);
+                    node_indexes.push((index as u16 * 16) + i);
                 }
             }
-
-            index += 1;
         }
 
         for number in node_indexes {

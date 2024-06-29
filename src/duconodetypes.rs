@@ -27,7 +27,7 @@ pub enum NodeType {
 #[repr(u16)]
 pub enum VentilationPosition {
     #[strum(serialize = "Auto")]
-    AUTO = 0,
+    Auto = 0,
     #[strum(serialize = "Manual 1")]
     Manual1 = 4,
     #[strum(serialize = "Manual 2")]

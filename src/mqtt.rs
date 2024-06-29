@@ -111,8 +111,8 @@ impl MqttConnection {
     }
 
     async fn handle_mqtt_message(&mut self, ev: Event) -> Result<Option<MqttData>, Error> {
-        match ev {
-            Event::Incoming(event) => match event {
+        if let Event::Incoming(event) = ev {
+            match event {
                 Packet::ConnAck(data) => {
                     if data.code == ConnectReturnCode::Success {
                         if !data.session_present {
@@ -131,21 +131,8 @@ impl MqttConnection {
                         payload: from_mqtt_string(&publ.payload)?,
                     }));
                 }
-                //Packet::Connect(_) => todo!(),
-                // Packet::PubAck(_) => todo!(),
-                // Packet::PubRec(_) => todo!(),
-                // Packet::PubRel(_) => todo!(),
-                // Packet::PubComp(_) => todo!(),
-                // Packet::Subscribe(_) => todo!(),
-                // Packet::SubAck(_) => todo!(),
-                // Packet::Unsubscribe(_) => todo!(),
-                // Packet::UnsubAck(_) => todo!(),
-                // Packet::PingReq => todo!(),
-                // Packet::PingResp => todo!(),
-                // Packet::Disconnect => todo!(),
                 _ => {}
-            },
-            _ => {}
+            }
         }
 
         Ok(None)
