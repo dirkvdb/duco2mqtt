@@ -1,10 +1,11 @@
 use std::str::FromStr;
 
 use crate::{
+    ducoapi,
     duconodetypes::{HoldingRegister, InputRegister, NodeType, VentilationPosition},
     modbus::DucoModbusConnection,
     mqtt::MqttData,
-    Error,
+    Error, Result,
 };
 
 pub const UNKNOWN: &str = "UNKNOWN";
@@ -144,7 +145,7 @@ impl DucoBoxNode {
         reg: HoldingRegister,
         value: &str,
         modbus: &mut DucoModbusConnection,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let register_value;
         match reg {
             HoldingRegister::VentilationPosition => {
@@ -201,7 +202,7 @@ impl DucoBoxNode {
         topics
     }
 
-    pub async fn update_status(&mut self, modbus: &mut DucoModbusConnection) -> Result<(), Error> {
+    pub async fn update_status(&mut self, modbus: &mut DucoModbusConnection) -> Result<()> {
         for register in self.registers.iter_mut() {
             match register {
                 Register::Input(reg, val) => {
@@ -262,5 +263,16 @@ impl DucoBoxNode {
             },
             None => String::from(UNKNOWN),
         }
+    }
+}
+
+impl TryFrom<ducoapi::NodeInfo> for DucoBoxNode {
+    type Error = Error;
+
+    fn try_from(node_info: ducoapi::NodeInfo) -> Result<Self> {
+        let node_type = NodeType::from_str(&node_info.General.Type.Val)
+            .map_err(|_| Error::Runtime(format!("Unknown node type: {}", node_info.General.Type.Val)))?;
+        DucoBoxNode::create_for_node_type(node_type, node_info.Node)
+            .ok_or_else(|| Error::Runtime(format!("Unsupported node type: {}", node_info.General.Type.Val)))
     }
 }

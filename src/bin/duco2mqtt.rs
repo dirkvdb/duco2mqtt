@@ -64,6 +64,7 @@ async fn main() {
     log::info!("{} version {}", PACKAGE, VERSION);
 
     let cfg = DucoMqttBridgeConfig {
+        ducobox_address: opt.duco_addr.clone(),
         modbus_config: ModbusConfig {
             slave_address: opt.duco_addr,
             slave_id: opt.duco_slave_id,

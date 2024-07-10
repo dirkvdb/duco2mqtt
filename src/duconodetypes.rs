@@ -7,10 +7,13 @@ pub enum NodeType {
     RemoteControlRFBAT = 8,
     RemoteControlRFWired = 9,
     HumidityRoomSensor = 10,
+    #[strum(serialize = "UCCO2")]
     CO2RoomSensor = 12,
     SensorlessControlValve = 13,
     HumidityControlValve = 14,
+    #[strum(serialize = "VLV")]
     CO2ControlValve = 16,
+    #[strum(serialize = "BOX")]
     DucoBox = 17,
     SwitchSensor = 18,
     ControlUnit = 27,

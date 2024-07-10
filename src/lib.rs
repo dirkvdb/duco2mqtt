@@ -2,6 +2,7 @@
 use thiserror::Error;
 
 pub mod bridge;
+mod ducoapi;
 mod duconodetypes;
 mod duxoboxnode;
 mod hassdiscovery;
@@ -32,4 +33,8 @@ pub enum Error {
     MqttConnectionError(#[from] rumqttc::v5::ConnectionError),
     #[error("Serialization error {0}")]
     SerializationError(#[from] serde_json::Error),
+    #[error("Request error {0}")]
+    RequestError(#[from] reqwest::Error),
 }
+
+type Result<T> = std::result::Result<T, Error>;

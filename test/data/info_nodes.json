@@ -1,0 +1,223 @@
+{
+    "Nodes": [
+        {
+            "Node": 1,
+            "General": {
+                "Type": {
+                    "Val": "BOX"
+                },
+                "SubType": {
+                    "Val": 31
+                },
+                "NetworkType": {
+                    "Val": "VIRT"
+                },
+                "Parent": {
+                    "Val": 0
+                },
+                "Asso": {
+                    "Val": 0
+                },
+                "Name": {
+                    "Val": "Main"
+                },
+                "Identify": {
+                    "Val": 0
+                }
+            },
+            "Ventilation": {
+                "State": {
+                    "Val": "AUTO"
+                },
+                "TimeStateRemain": {
+                    "Val": 0
+                },
+                "TimeStateEnd": {
+                    "Val": 0
+                },
+                "Mode": {
+                    "Val": "AUTO"
+                },
+                "FlowLvlTgt": {
+                    "Val": 35
+                }
+            }
+        },
+        {
+            "Node": 2,
+            "General": {
+                "Type": {
+                    "Val": "UCCO2"
+                },
+                "SubType": {
+                    "Val": 1
+                },
+                "NetworkType": {
+                    "Val": "RF"
+                },
+                "Parent": {
+                    "Val": 67
+                },
+                "Asso": {
+                    "Val": 67
+                },
+                "Name": {
+                    "Val": "Boven"
+                },
+                "Identify": {
+                    "Val": 0
+                }
+            },
+            "Ventilation": {
+                "State": {
+                    "Val": "-"
+                },
+                "TimeStateRemain": {
+                    "Val": 0
+                },
+                "TimeStateEnd": {
+                    "Val": 0
+                },
+                "Mode": {
+                    "Val": "-"
+                }
+            },
+            "Sensor": {
+                "IaqCo2": {
+                    "Val": 100
+                }
+            }
+        },
+        {
+            "Node": 3,
+            "General": {
+                "Type": {
+                    "Val": "UCCO2"
+                },
+                "SubType": {
+                    "Val": 2
+                },
+                "NetworkType": {
+                    "Val": "RF"
+                },
+                "Parent": {
+                    "Val": 68
+                },
+                "Asso": {
+                    "Val": 68
+                },
+                "Name": {
+                    "Val": "Beneden"
+                },
+                "Identify": {
+                    "Val": 0
+                }
+            },
+            "Ventilation": {
+                "State": {
+                    "Val": "-"
+                },
+                "TimeStateRemain": {
+                    "Val": 0
+                },
+                "TimeStateEnd": {
+                    "Val": 0
+                },
+                "Mode": {
+                    "Val": "-"
+                }
+            },
+            "Sensor": {
+                "IaqCo2": {
+                    "Val": 100
+                }
+            }
+        },
+        {
+            "Node": 67,
+            "General": {
+                "Type": {
+                    "Val": "VLV"
+                },
+                "SubType": {
+                    "Val": 0
+                },
+                "NetworkType": {
+                    "Val": "VIRT"
+                },
+                "Parent": {
+                    "Val": 1
+                },
+                "Asso": {
+                    "Val": 0
+                },
+                "Name": {
+                    "Val": ""
+                },
+                "Identify": {
+                    "Val": 0
+                }
+            },
+            "Ventilation": {
+                "State": {
+                    "Val": "AUTO"
+                },
+                "TimeStateRemain": {
+                    "Val": 0
+                },
+                "TimeStateEnd": {
+                    "Val": 0
+                },
+                "Mode": {
+                    "Val": "AUTO"
+                },
+                "FlowLvlTgt": {
+                    "Val": 35
+                }
+            }
+        },
+        {
+            "Node": 68,
+            "General": {
+                "Type": {
+                    "Val": "VLV"
+                },
+                "SubType": {
+                    "Val": 0
+                },
+                "NetworkType": {
+                    "Val": "VIRT"
+                },
+                "Parent": {
+                    "Val": 1
+                },
+                "Asso": {
+                    "Val": 0
+                },
+                "Name": {
+                    "Val": ""
+                },
+                "Identify": {
+                    "Val": 0
+                }
+            },
+            "Ventilation": {
+                "State": {
+                    "Val": "AUTO"
+                },
+                "TimeStateRemain": {
+                    "Val": 0
+                },
+                "TimeStateEnd": {
+                    "Val": 0
+                },
+                "Mode": {
+                    "Val": "AUTO"
+                },
+                "FlowLvlTgt": {
+                    "Val": 35
+                }
+            }
+        }
+    ]
+}
