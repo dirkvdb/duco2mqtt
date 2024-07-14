@@ -1,9 +1,8 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use crate::{
-    ducoapi,
-    duconodetypes::{HoldingRegister, InputRegister, NodeType, VentilationPosition},
-    modbus::DucoModbusConnection,
+    ducoapi::{self, NodeAction, NodeActions, NodeInfo, NodeStatusField, NodeValue},
+    duconodetypes::NodeType,
     mqtt::MqttData,
     Error, Result,
 };
@@ -18,70 +17,52 @@ fn optional_enum_string<T: std::string::ToString + num::FromPrimitive>(val: u16)
     }
 }
 
-enum Register {
-    Holding(HoldingRegister, RegisterValue),
-    Input(InputRegister, RegisterValue),
-}
-
-struct RegisterValue {
-    value: Option<u16>,
+struct InfoValue {
+    value: NodeValue,
     modified: bool,
 }
 
-impl RegisterValue {
-    fn new() -> RegisterValue {
-        RegisterValue {
-            value: None,
-            modified: true,
-        }
+impl InfoValue {
+    fn new(value: NodeValue) -> Self {
+        Self { value, modified: true }
     }
 
-    fn set(&mut self, val: Option<u16>) {
+    fn set(&mut self, val: NodeValue) {
         if val != self.value {
             self.modified = true;
             self.value = val;
         }
     }
 
-    fn clear(&mut self) {
-        self.set(None);
-    }
-
     fn modified(&self) -> bool {
         self.modified
     }
 
-    fn get_and_reset(&mut self) -> Option<u16> {
+    fn get_and_reset(&mut self) -> NodeValue {
         self.modified = false;
-        self.value
+        self.value.clone()
     }
+}
+
+pub enum DucoNodeAction {
+    SetBoolean(String),
+    SetEnum(String, Vec<String>),
 }
 
 pub struct DucoBoxNode {
     number: u16,
     node_type: NodeType,
-    registers: Vec<Register>,
+    status: HashMap<String, InfoValue>,
+    actions: Vec<DucoNodeAction>,
 }
 
 impl DucoBoxNode {
-    pub fn create_for_node_type(node_type: NodeType, number: u16) -> Option<DucoBoxNode> {
-        let mut registers = Vec::new();
-        for input_register in DucoBoxNode::supported_input_registers(node_type) {
-            registers.push(Register::Input(input_register, RegisterValue::new()));
-        }
-
-        for holding_register in DucoBoxNode::supported_holding_registers(node_type) {
-            registers.push(Register::Holding(holding_register, RegisterValue::new()));
-        }
-
-        if registers.is_empty() {
-            None
-        } else {
-            Some(DucoBoxNode {
-                number,
-                node_type,
-                registers,
-            })
+    pub fn create_for_node_type(node_type: NodeType, number: u16) -> DucoBoxNode {
+        DucoBoxNode {
+            number,
+            node_type,
+            status: HashMap::default(),
+            actions: Vec::default(),
         }
     }
 
@@ -93,176 +74,63 @@ impl DucoBoxNode {
         self.node_type
     }
 
-    pub fn supported_input_registers(node_type: NodeType) -> Vec<InputRegister> {
-        match node_type {
-            NodeType::DucoBox => vec![
-                InputRegister::SystemType,
-                InputRegister::FlowRateVsTargetLevel,
-                InputRegister::FilterTimeRemaining,
-            ],
-            NodeType::CO2RoomSensor => vec![
-                InputRegister::SystemType,
-                InputRegister::RemainingTimeCurrentVenilationMode,
-                InputRegister::IndoorAirQualityBasedOnCO2,
-            ],
-            NodeType::SensorlessControlValve => vec![
-                InputRegister::SystemType,
-                InputRegister::RemainingTimeCurrentVenilationMode,
-                InputRegister::FlowRateVsTargetLevel,
-            ],
-            _ => Vec::new(),
-        }
-    }
-
-    pub fn supported_holding_registers(node_type: NodeType) -> Vec<HoldingRegister> {
-        match node_type {
-            NodeType::DucoBox => vec![
-                HoldingRegister::VentilationPosition,
-                HoldingRegister::SupplyTemperatureTargetZone1,
-                HoldingRegister::SupplyTemperatureTargetZone2,
-            ],
-            NodeType::CO2RoomSensor => vec![HoldingRegister::VentilationPosition, HoldingRegister::Identification],
-            NodeType::SensorlessControlValve => vec![HoldingRegister::VentilationPosition],
-            _ => Vec::new(),
-        }
-    }
-
     pub fn reset(&mut self) {
-        for register in self.registers.iter_mut() {
-            match register {
-                Register::Holding(_reg, val) => {
-                    val.clear();
-                }
-                Register::Input(_reg, val) => {
-                    val.clear();
-                }
-            }
+        for (_key, value) in self.status.iter_mut() {
+            value.set(NodeValue::String(UNKNOWN.to_string()))
         }
-    }
-
-    pub async fn process_command(
-        &self,
-        reg: HoldingRegister,
-        value: &str,
-        modbus: &mut DucoModbusConnection,
-    ) -> Result<()> {
-        let register_value;
-        match reg {
-            HoldingRegister::VentilationPosition => {
-                register_value = VentilationPosition::from_str(value).unwrap() as u16;
-            }
-            HoldingRegister::Identification => {
-                register_value = value.parse::<u16>().map_err(|_| {
-                    Error::Runtime(format!("Identifcation should be an integral value, got {}", value,))
-                })?;
-
-                if register_value > 1 {
-                    return Err(Error::Runtime(format!(
-                        "Identifcation should be 0 or 1, got '{}'",
-                        register_value,
-                    )));
-                }
-            }
-            HoldingRegister::SupplyTemperatureTargetZone1 => todo!(),
-            HoldingRegister::SupplyTemperatureTargetZone2 => todo!(),
-        }
-
-        let address = self.number() * 100 + reg as u16;
-        log::info!("Write register address {address} with value: {register_value}");
-        modbus.write_holding_register(address, register_value).await?;
-
-        Ok(())
     }
 
     pub fn topics_that_need_updating(&mut self) -> Vec<MqttData> {
         let mut topics = Vec::new();
-        for register in self.registers.iter_mut() {
-            match register {
-                Register::Holding(reg, val) => {
-                    if val.modified() {
-                        let val = val.get_and_reset();
-                        topics.push(MqttData {
-                            topic: DucoBoxNode::register_topic(self.number, *reg),
-                            payload: DucoBoxNode::holding_register_value_string(*reg, val),
-                        });
-                    }
-                }
-                Register::Input(reg, val) => {
-                    if val.modified() {
-                        let val = val.get_and_reset();
-                        topics.push(MqttData {
-                            topic: DucoBoxNode::register_topic(self.number, *reg),
-                            payload: DucoBoxNode::input_register_value_string(*reg, val),
-                        });
-                    }
-                }
+
+        for (key, value) in self.status.iter_mut() {
+            if value.modified() {
+                let val = value.get_and_reset();
+                topics.push(MqttData {
+                    topic: DucoBoxNode::status_topic(self.number, key),
+                    payload: val.to_string(),
+                });
             }
         }
 
         topics
     }
 
-    pub async fn update_status(&mut self, modbus: &mut DucoModbusConnection) -> Result<()> {
-        for register in self.registers.iter_mut() {
-            match register {
-                Register::Input(reg, val) => {
-                    let addr = self.number * 100 + *reg as u16;
-                    let mut register_val = modbus.read_input_register(addr).await;
-                    if let Err(err) = register_val.as_ref() {
-                        if reg == &InputRegister::RemainingTimeCurrentVenilationMode {
-                            // This register can only be read when the ventilation is running in manual mode
-                            register_val = Ok(0);
-                        } else {
-                            log::warn!("Failed to read input register: {err}")
-                        }
-                    }
-                    val.set(register_val.ok());
-                }
-                Register::Holding(reg, val) => {
-                    let addr = self.number * 100 + *reg as u16;
-                    let register_val = modbus.read_holding_register(addr).await;
-                    if let Err(err) = register_val.as_ref() {
-                        log::warn!("Failed to read holding register: {err}")
-                    }
-                    val.set(register_val.ok());
-                }
+    fn status_topic(node_number: u16, topic: &str) -> String {
+        format!("node_{}/{}", node_number, topic)
+    }
+
+    fn merge_status_values(&mut self, sub_topic: &str, values: HashMap<String, NodeStatusField>) {
+        for (name, value) in values {
+            let key = format!("{sub_topic}/{name}");
+            if let Some(info_value) = self.status.get_mut(&key) {
+                info_value.set(value.Val);
+            } else {
+                self.status.insert(key, InfoValue::new(value.Val));
             }
+        }
+    }
+
+    pub fn update_status(&mut self, node: NodeInfo) -> Result<()> {
+        assert_eq!(self.number, node.Node, "Node number mismatch");
+
+        self.merge_status_values("general", node.General);
+        self.merge_status_values("ventilation", node.Ventilation);
+        if let Some(sensor) = node.Sensor {
+            self.merge_status_values("sensor", sensor);
         }
 
         Ok(())
     }
 
-    fn input_register_value_string(reg: InputRegister, val: Option<u16>) -> String {
-        match val {
-            Some(val) => match reg {
-                InputRegister::SystemType => optional_enum_string::<NodeType>(val),
-                InputRegister::FlowRateVsTargetLevel
-                | InputRegister::IndoorAirQualityBasedOnCO2
-                | InputRegister::RemainingTimeCurrentVenilationMode
-                | InputRegister::FilterTimeRemaining => {
-                    format!("{val}")
-                }
-            },
-            None => String::from(UNKNOWN),
-        }
-    }
+    pub fn set_actions(&mut self, actions: NodeActions) -> Result<()> {
+        self.actions = actions
+            .Actions
+            .into_iter()
+            .map(DucoNodeAction::try_from)
+            .collect::<Result<Vec<_>>>()?;
 
-    fn register_topic<T: std::string::ToString>(node_number: u16, reg: T) -> String {
-        format!("node_{}/{}", node_number, reg.to_string())
-    }
-
-    fn holding_register_value_string(reg: HoldingRegister, val: Option<u16>) -> String {
-        match val {
-            Some(val) => match reg {
-                HoldingRegister::VentilationPosition => optional_enum_string::<VentilationPosition>(val),
-                HoldingRegister::Identification
-                | HoldingRegister::SupplyTemperatureTargetZone1
-                | HoldingRegister::SupplyTemperatureTargetZone2 => {
-                    format!("{val}")
-                }
-            },
-            None => String::from(UNKNOWN),
-        }
+        Ok(())
     }
 }
 
@@ -270,9 +138,112 @@ impl TryFrom<ducoapi::NodeInfo> for DucoBoxNode {
     type Error = Error;
 
     fn try_from(node_info: ducoapi::NodeInfo) -> Result<Self> {
-        let node_type = NodeType::from_str(&node_info.General.Type.Val)
-            .map_err(|_| Error::Runtime(format!("Unknown node type: {}", node_info.General.Type.Val)))?;
-        DucoBoxNode::create_for_node_type(node_type, node_info.Node)
-            .ok_or_else(|| Error::Runtime(format!("Unsupported node type: {}", node_info.General.Type.Val)))
+        let NodeValue::String(ref type_str) = node_info
+            .General
+            .get("Type")
+            .ok_or_else(|| Error::Runtime("Type missing".to_string()))?
+            .Val
+        else {
+            return Err(Error::Runtime("Node type is not a string value".to_string()));
+        };
+
+        let node_type =
+            NodeType::from_str(type_str).map_err(|_| Error::Runtime(format!("Unknown node type: {}", type_str)))?;
+
+        let mut node = DucoBoxNode::create_for_node_type(node_type, node_info.Node);
+        node.update_status(node_info)?;
+        Ok(node)
+    }
+}
+
+impl TryFrom<NodeAction> for DucoNodeAction {
+    type Error = Error;
+
+    fn try_from(action: NodeAction) -> Result<Self> {
+        match action.ValType.as_str() {
+            "Enum" => Ok(DucoNodeAction::SetEnum(
+                action.Action,
+                action
+                    .Enum
+                    .ok_or_else(|| Error::Runtime("Enum values missing for action".to_string()))?,
+            )),
+            "Boolean" => Ok(DucoNodeAction::SetBoolean(action.Action)),
+            _ => Err(Error::Runtime(format!("Unsupported action type '{}'", action.ValType))),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_info_value() {
+        let mut val = InfoValue::new(NodeValue::String("foo".to_string()));
+        assert!(val.modified());
+        assert_eq!(val.get_and_reset(), NodeValue::String("foo".to_string()));
+        assert!(!val.modified());
+    }
+
+    #[test]
+    fn test_duco_node_action() {
+        let action = NodeAction {
+            Action: "foo".to_string(),
+            ValType: "Enum".to_string(),
+            Enum: Some(vec!["bar".to_string()]),
+        };
+
+        let duco_action = DucoNodeAction::try_from(action).unwrap();
+        if let DucoNodeAction::SetEnum(action, values) = duco_action {
+            assert_eq!(action, "foo");
+            assert_eq!(values, vec!["bar".to_string()]);
+        } else {
+            panic!("Unexpected action type");
+        }
+    }
+
+    #[test]
+    fn test_ducobox_node() {
+        let node_info = NodeInfo {
+            Node: 1,
+            General: HashMap::from([
+                ("Type".to_string(), NodeStatusField::from("BOX")),
+                ("SubType".to_string(), NodeStatusField::from(1)),
+            ]),
+            Ventilation: HashMap::new(),
+            Sensor: None,
+        };
+
+        let mut node = DucoBoxNode::try_from(node_info).unwrap();
+        assert_eq!(node.number(), 1);
+
+        let mut topics = node.topics_that_need_updating();
+        topics.sort();
+        assert_eq!(
+            topics,
+            vec![
+                MqttData::new("node_1/general/SubType", "1"),
+                MqttData::new("node_1/general/Type", "BOX")
+            ]
+        );
+
+        let node_info_update = NodeInfo {
+            Node: 1,
+            General: HashMap::from([
+                ("SubType".to_string(), NodeStatusField::from(2)),
+                ("Type".to_string(), NodeStatusField::from("BOX")),
+            ]),
+            Ventilation: HashMap::new(),
+            Sensor: None,
+        };
+
+        node.update_status(node_info_update.clone()).unwrap();
+        assert_eq!(
+            node.topics_that_need_updating(),
+            vec![MqttData::new("node_1/general/SubType", "2"),]
+        );
+
+        node.update_status(node_info_update.clone()).unwrap();
+        assert!(node.topics_that_need_updating().is_empty(),);
     }
 }

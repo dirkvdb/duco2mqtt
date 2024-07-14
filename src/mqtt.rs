@@ -20,10 +20,31 @@ pub struct MqttConfig {
     pub base_topic: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct MqttData {
     pub topic: String,
     pub payload: String,
+}
+
+impl MqttData {
+    pub fn new<T: AsRef<str>>(topic: T, payload: T) -> MqttData {
+        MqttData {
+            topic: String::from(topic.as_ref()),
+            payload: String::from(payload.as_ref()),
+        }
+    }
+}
+
+impl PartialOrd for MqttData {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.topic.cmp(&other.topic))
+    }
+}
+
+impl Ord for MqttData {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.topic.cmp(&other.topic)
+    }
 }
 
 pub struct MqttConnection {

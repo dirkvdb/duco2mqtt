@@ -6,7 +6,6 @@ mod ducoapi;
 mod duconodetypes;
 mod duxoboxnode;
 mod hassdiscovery;
-pub mod modbus;
 pub mod mqtt;
 
 extern crate num;

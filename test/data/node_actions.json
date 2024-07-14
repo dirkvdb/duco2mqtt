@@ -1,0 +1,156 @@
+{
+    "Nodes": [
+        {
+            "Node": 1,
+            "Actions": [
+                {
+                    "Action": "SetVentilationState",
+                    "ValType": "Enum",
+                    "Enum": [
+                        "AUTO",
+                        "AUT1",
+                        "AUT2",
+                        "AUT3",
+                        "MAN1",
+                        "MAN2",
+                        "MAN3",
+                        "EMPT",
+                        "CNT1",
+                        "CNT2",
+                        "CNT3",
+                        "MAN1x2",
+                        "MAN2x2",
+                        "MAN3x2",
+                        "MAN1x3",
+                        "MAN2x3",
+                        "MAN3x3"
+                    ]
+                },
+                {
+                    "Action": "SetIdentify",
+                    "ValType": "Boolean"
+                }
+            ]
+        },
+        {
+            "Node": 2,
+            "Actions": [
+                {
+                    "Action": "SetVentilationState",
+                    "ValType": "Enum",
+                    "Enum": [
+                        "AUTO",
+                        "AUT1",
+                        "AUT2",
+                        "AUT3",
+                        "MAN1",
+                        "MAN2",
+                        "MAN3",
+                        "EMPT",
+                        "CNT1",
+                        "CNT2",
+                        "CNT3",
+                        "MAN1x2",
+                        "MAN2x2",
+                        "MAN3x2",
+                        "MAN1x3",
+                        "MAN2x3",
+                        "MAN3x3"
+                    ]
+                },
+                {
+                    "Action": "SetIdentify",
+                    "ValType": "Boolean"
+                }
+            ]
+        },
+        {
+            "Node": 3,
+            "Actions": [
+                {
+                    "Action": "SetVentilationState",
+                    "ValType": "Enum",
+                    "Enum": [
+                        "AUTO",
+                        "AUT1",
+                        "AUT2",
+                        "AUT3",
+                        "MAN1",
+                        "MAN2",
+                        "MAN3",
+                        "EMPT",
+                        "CNT1",
+                        "CNT2",
+                        "CNT3",
+                        "MAN1x2",
+                        "MAN2x2",
+                        "MAN3x2",
+                        "MAN1x3",
+                        "MAN2x3",
+                        "MAN3x3"
+                    ]
+                },
+                {
+                    "Action": "SetIdentify",
+                    "ValType": "Boolean"
+                }
+            ]
+        },
+        {
+            "Node": 67,
+            "Actions": [
+                {
+                    "Action": "SetVentilationState",
+                    "ValType": "Enum",
+                    "Enum": [
+                        "AUTO",
+                        "AUT1",
+                        "AUT2",
+                        "AUT3",
+                        "MAN1",
+                        "MAN2",
+                        "MAN3",
+                        "EMPT",
+                        "CNT1",
+                        "CNT2",
+                        "CNT3",
+                        "MAN1x2",
+                        "MAN2x2",
+                        "MAN3x2",
+                        "MAN1x3",
+                        "MAN2x3",
+                        "MAN3x3"
+                    ]
+                }
+            ]
+        },
+        {
+            "Node": 68,
+            "Actions": [
+                {
+                    "Action": "SetVentilationState",
+                    "ValType": "Enum",
+                    "Enum": [
+                        "AUTO",
+                        "AUT1",
+                        "AUT2",
+                        "AUT3",
+                        "MAN1",
+                        "MAN2",
+                        "MAN3",
+                        "EMPT",
+                        "CNT1",
+                        "CNT2",
+                        "CNT3",
+                        "MAN1x2",
+                        "MAN2x2",
+                        "MAN3x2",
+                        "MAN1x3",
+                        "MAN2x3",
+                        "MAN3x3"
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -1,11 +1,11 @@
 #![warn(clippy::unwrap_used)]
 use core::time;
+use std::path::PathBuf;
 
 use clap::Parser;
 use clap_verbosity_flag::WarnLevel;
 use duco2mqtt::{
     bridge::{self, DucoMqttBridgeConfig},
-    modbus::ModbusConfig,
     mqtt::MqttConfig,
 };
 use env_logger::Env;
@@ -22,9 +22,6 @@ struct Opt {
     // set the duco connectivity board address
     #[clap(long = "duco-addr", env = "D2M_DUCO_ADDRESS")]
     duco_addr: String,
-
-    #[clap(long = "duco-modbus-slave-id", env = "D2M_MODBUS_SLAVE_ID", default_value_t = 1)]
-    duco_slave_id: u8,
 
     #[clap(long = "duco-poll-interval", env = "D2M_POLL_INTERVAL", default_value_t = 60)]
     duco_poll_interval: u64,
@@ -50,6 +47,9 @@ struct Opt {
 
     #[clap(long = "hass-discovery", env = "D2M_HASS_DISCOVERY", default_value_t = false)]
     hass_discovery: bool,
+
+    #[clap(long = "certificate", env = "D2M_DUCO_CERTIFICATE")]
+    certificate: Option<String>,
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -65,11 +65,8 @@ async fn main() {
 
     let cfg = DucoMqttBridgeConfig {
         ducobox_address: opt.duco_addr.clone(),
-        modbus_config: ModbusConfig {
-            slave_address: opt.duco_addr,
-            slave_id: opt.duco_slave_id,
-            poll_interval: time::Duration::from_secs(opt.duco_poll_interval),
-        },
+        ducobox_certificate: opt.certificate.map(PathBuf::from),
+        poll_interval: time::Duration::from_secs(opt.duco_poll_interval),
         mqtt_config: MqttConfig {
             server: opt.mqtt_addr,
             port: opt.mqtt_port,
