@@ -48,24 +48,3 @@ pub enum VentilationPosition {
     #[strum(serialize = "Unknown")]
     Unknown = 11,
 }
-
-#[derive(Clone, Copy, EnumString, Display, Debug, PartialEq)]
-#[strum(serialize_all = "snake_case")]
-pub enum InputRegister {
-    SystemType = 0,
-    RemainingTimeCurrentVenilationMode = 2,
-    FlowRateVsTargetLevel = 3,
-    //IndoorAirQualityBasedOnRH = 4,
-    IndoorAirQualityBasedOnCO2 = 5,
-    //VentilationStatus = 6,
-    FilterTimeRemaining = 7,
-}
-
-#[derive(Clone, Copy, EnumString, Display, Debug, PartialEq)]
-#[strum(serialize_all = "snake_case")]
-pub enum HoldingRegister {
-    VentilationPosition = 0,
-    Identification = 1,
-    SupplyTemperatureTargetZone1 = 2,
-    SupplyTemperatureTargetZone2 = 3,
-}

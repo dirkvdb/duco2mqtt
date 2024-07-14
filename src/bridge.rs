@@ -1,24 +1,17 @@
-use crate::ducoapi::NodeInfo;
-use crate::duconodetypes::HoldingRegister;
+use crate::ducoapi::{NodeAction, NodeInfo};
 use crate::duxoboxnode::DucoBoxNode;
 use crate::mqtt::{MqttConfig, MqttConnection, MqttData};
 use crate::{ducoapi, Error, Result};
-use log;
-use reqwest::Certificate;
 use std::path::PathBuf;
-use std::str::FromStr;
 use tokio::time;
 
-const HASS_DISCOVERY_TOPIC: &str = "homeassistant";
+//const HASS_DISCOVERY_TOPIC: &str = "homeassistant";
 
 fn http_client(ducobox_certificate: &Option<PathBuf>) -> Result<reqwest::Client> {
-    log::debug!("Create HTTP client");
     let mut builder = reqwest::Client::builder();
     if let Some(cert) = ducobox_certificate {
-        log::debug!("Using certificate: {}", cert.display());
-        builder = builder.add_root_certificate(Certificate::from_pem(&std::fs::read(cert)?)?);
+        builder = builder.add_root_certificate(reqwest::Certificate::from_pem(&std::fs::read(cert)?)?);
     } else {
-        log::warn!("No certificate provided, disabling certificate validation");
         builder = builder.danger_accept_invalid_certs(true);
     }
 
@@ -46,6 +39,10 @@ pub struct DucoMqttBridge {
 impl DucoMqttBridge {
     pub fn new(cfg: DucoMqttBridgeConfig) -> DucoMqttBridge {
         let mqtt_base_topic = format!("{}/", cfg.mqtt_config.base_topic);
+        if cfg.ducobox_certificate.is_none() {
+            log::warn!("No certificate provided, disabling certificate validation");
+        }
+
         DucoMqttBridge {
             mqtt: MqttConnection::new(cfg.mqtt_config),
             ducobox_address: cfg.ducobox_address,
@@ -59,15 +56,14 @@ impl DucoMqttBridge {
 
     pub async fn run(mut self) -> Result<()> {
         let mut interval = time::interval(self.poll_interval);
-        //let mut modbus = DucoModbusConnection::new();
 
         loop {
             tokio::select! {
                 mqtt_msg = self.mqtt.poll() => {
                     if let Ok(Some(msg)) = mqtt_msg {
-                        log::debug!("MQTT cmnd: {} {}", msg.topic, msg.payload);
-                        if let Err(err) = self.handle_node_command(&msg).await {
-                            log::error!("Failed to process command: {}: {} ({err})", msg.topic, msg.payload);
+                        log::info!("MQTT cmnd: {} {}", msg.topic, msg.payload);
+                        if let Err(err) = self.handle_node_command(msg).await {
+                            log::error!("Failed to process command: {err}");
                         }
                     }
                 }
@@ -80,15 +76,6 @@ impl DucoMqttBridge {
                     } else {
                         let _ = self.mqtt.publish_online().await;
                     }
-
-                    // if let Err(err) = self.poll_modbus(&mut modbus).await {
-                    //     log::error!("Failed to update status: {err}");
-                    //     self.reset_nodes();
-                    //     let _ = self.publish_nodes().await;
-                    //     let _ = self.mqtt.publish_offline().await;
-                    // } else {
-                    //     let _ = self.mqtt.publish_online().await;
-                    // }
                 }
             }
         }
@@ -146,7 +133,8 @@ impl DucoMqttBridge {
                 }
             }
         } else {
-            let client = http_client(&self.ducobox_certificate)?;
+            let certificate = self.ducobox_certificate.clone();
+            let client = http_client(&certificate)?;
             self.merge_nodes(ducoapi::get_nodes(&client, &self.ducobox_address).await?)?;
         }
 
@@ -165,51 +153,51 @@ impl DucoMqttBridge {
 
     fn node_number_for_node_name(topic: &str) -> Result<u16> {
         let parts: Vec<&str> = topic.split('_').collect();
-        if parts.len() == 2 && parts[0] == "node" {
-            return parts[1]
+        if parts.len() == 3 && parts[0] == "duco" && parts[1] == "node" {
+            return parts[2]
                 .parse()
-                .map_err(|_| Error::Runtime(format!("Invalid node number '{}'", parts[1])));
+                .map_err(|_| Error::Runtime(format!("Invalid node number '{}'", parts[2])));
         }
 
         Err(Error::Runtime(format!("Invalid node topic provided: {}", topic)))
     }
 
-    fn node_number_cmd_from_topic(topic: &str) -> Result<(u16, HoldingRegister)> {
+    fn node_and_action_from_topic(topic: &str) -> Result<(u16, String)> {
         let topics: Vec<&str> = topic.split('/').collect();
         if topics.len() == 3 && topics[1] == "cmnd" {
             let node = DucoMqttBridge::node_number_for_node_name(topics[0])?;
-            let holding_register = HoldingRegister::from_str(topics[2])
-                .map_err(|_| Error::Runtime(format!("Invalid command : '{}'", topics[0])))?;
+            let action = String::from(topics[2]);
 
-            return Ok((node, holding_register));
+            return Ok((node, action));
         }
 
-        Err(Error::Runtime(format!("Invalid node topic provided: {}", topic)))
+        Err(Error::Runtime(format!(
+            "Invalid node topic provided: {} ({:?})",
+            topic, topics
+        )))
     }
 
-    async fn handle_node_command(&mut self, msg: &MqttData) -> Result<()> {
-        // if let Some(path) = msg.topic.strip_prefix(self.mqtt_base_topic.as_str()) {
-        //     let (node_nr, reg) = DucoMqttBridge::node_number_cmd_from_topic(path)?;
+    async fn handle_node_command(&mut self, msg: MqttData) -> Result<()> {
+        if let Some(path) = msg.topic.strip_prefix(self.mqtt_base_topic.as_str()) {
+            let (node_nr, action) = DucoMqttBridge::node_and_action_from_topic(path)?;
 
-        //     let mut modbus = DucoModbusConnection::new();
-        //     modbus.connect(&self.modbus_cfg).await?;
-        //     let node = self.node_with_number(node_nr)?;
-        //     node.process_command(reg, msg.payload.as_str(), &mut modbus).await?;
-        //     self.update_nodes(&mut modbus).await?;
-        //     self.publish_nodes().await?;
-        //     return Ok(());
-        // }
+            let addr = self.ducobox_address.clone();
+            let client = http_client(&self.ducobox_certificate)?;
+            let node = self.node_with_number(node_nr)?;
+
+            let action = NodeAction {
+                Action: action,
+                Val: msg.payload,
+            };
+
+            node.process_command(action, &client, &addr).await?;
+
+            self.poll_ducobox().await?;
+            return Ok(());
+        }
 
         Err(Error::Runtime(format!("Unexpected command path: {}", msg.topic)))
     }
-
-    // async fn update_nodes(&mut self, modbus: &mut DucoModbusConnection) -> Result<()> {
-    //     for node in self.nodes.iter_mut() {
-    //         node.update_modbus_status(modbus).await?;
-    //     }
-
-    //     Ok(())
-    // }
 
     fn merge_nodes(&mut self, new_nodes: Vec<NodeInfo>) -> Result<()> {
         for new_node in new_nodes {
@@ -227,7 +215,7 @@ impl DucoMqttBridge {
         for node in self.nodes.iter_mut() {
             for mut mqtt_data in node.topics_that_need_updating() {
                 mqtt_data.topic = format!("{}{}", self.mqtt_base_topic, mqtt_data.topic);
-                log::debug!("{}: {}", mqtt_data.topic, mqtt_data.payload);
+                log::info!("{}: {}", mqtt_data.topic, mqtt_data.payload);
                 self.mqtt.publish(mqtt_data).await?;
             }
         }
@@ -336,30 +324,22 @@ mod tests {
 
     #[test]
     fn test_node_number_for_node_name() {
-        assert_eq!(DucoMqttBridge::node_number_for_node_name("node_1").unwrap(), 1);
-        assert_eq!(DucoMqttBridge::node_number_for_node_name("node_2").unwrap(), 2);
-        assert_eq!(DucoMqttBridge::node_number_for_node_name("node_3").unwrap(), 3);
-        assert_eq!(DucoMqttBridge::node_number_for_node_name("node_67").unwrap(), 67);
-        assert_eq!(DucoMqttBridge::node_number_for_node_name("node_68").unwrap(), 68);
+        assert_eq!(DucoMqttBridge::node_number_for_node_name("duco_node_1").unwrap(), 1);
+        assert_eq!(DucoMqttBridge::node_number_for_node_name("duco_node_2").unwrap(), 2);
+        assert_eq!(DucoMqttBridge::node_number_for_node_name("duco_node_3").unwrap(), 3);
+        assert_eq!(DucoMqttBridge::node_number_for_node_name("duco_node_67").unwrap(), 67);
+        assert_eq!(DucoMqttBridge::node_number_for_node_name("duco_node_68").unwrap(), 68);
     }
 
     #[test]
     fn test_node_number_command_from_topic() {
         assert_eq!(
-            DucoMqttBridge::node_number_cmd_from_topic("node_1/cmnd/ventilation_position").unwrap(),
-            (1, HoldingRegister::VentilationPosition)
+            DucoMqttBridge::node_and_action_from_topic("node_1/cmnd/SetVentilationState").unwrap(),
+            (1, "SetVentilationState".to_string())
         );
         assert_eq!(
-            DucoMqttBridge::node_number_cmd_from_topic("node_2/cmnd/identification").unwrap(),
-            (2, HoldingRegister::Identification)
-        );
-        assert_eq!(
-            DucoMqttBridge::node_number_cmd_from_topic("node_2/cmnd/supply_temperature_target_zone1").unwrap(),
-            (2, HoldingRegister::SupplyTemperatureTargetZone1)
-        );
-        assert_eq!(
-            DucoMqttBridge::node_number_cmd_from_topic("node_2/cmnd/supply_temperature_target_zone2").unwrap(),
-            (2, HoldingRegister::SupplyTemperatureTargetZone2)
+            DucoMqttBridge::node_and_action_from_topic("node_2/cmnd/SetIdentify").unwrap(),
+            (2, "SetIdentify".to_string())
         );
     }
 }

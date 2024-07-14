@@ -1,21 +1,13 @@
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
-    ducoapi::{self, NodeAction, NodeActions, NodeInfo, NodeStatusField, NodeValue},
+    ducoapi::{self, NodeAction, NodeActionDescription, NodeActions, NodeInfo, NodeStatusField, NodeValue},
     duconodetypes::NodeType,
     mqtt::MqttData,
     Error, Result,
 };
 
 pub const UNKNOWN: &str = "UNKNOWN";
-
-fn optional_enum_string<T: std::string::ToString + num::FromPrimitive>(val: u16) -> String {
-    let enum_type: Option<T> = num::FromPrimitive::from_u16(val);
-    match enum_type {
-        Some(enum_type) => enum_type.to_string(),
-        None => String::from(UNKNOWN),
-    }
-}
 
 struct InfoValue {
     value: NodeValue,
@@ -70,10 +62,6 @@ impl DucoBoxNode {
         self.number
     }
 
-    pub fn node_type(&self) -> NodeType {
-        self.node_type
-    }
-
     pub fn reset(&mut self) {
         for (_key, value) in self.status.iter_mut() {
             value.set(NodeValue::String(UNKNOWN.to_string()))
@@ -97,7 +85,7 @@ impl DucoBoxNode {
     }
 
     fn status_topic(node_number: u16, topic: &str) -> String {
-        format!("node_{}/{}", node_number, topic)
+        format!("duco_node_{}/{}", node_number, topic)
     }
 
     fn merge_status_values(&mut self, sub_topic: &str, values: HashMap<String, NodeStatusField>) {
@@ -132,6 +120,40 @@ impl DucoBoxNode {
 
         Ok(())
     }
+
+    fn verify_action_is_valid(&self, action: &NodeAction) -> Result<()> {
+        for node_action in &self.actions {
+            match node_action {
+                DucoNodeAction::SetBoolean(ref action_name) => {
+                    if *action_name == action.Action {
+                        return Ok(());
+                    }
+                }
+                DucoNodeAction::SetEnum(ref action_name, ref values) => {
+                    if action_name == &action.Action {
+                        if !values.contains(&action.Val) {
+                            return Err(Error::Runtime(format!(
+                                "Invalid value for action '{}': '{}'",
+                                action.Action, action.Val
+                            )));
+                        }
+
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
+        Err(Error::Runtime(format!(
+            "Invalid action for node {}: '{}'",
+            self.number, action.Action
+        )))
+    }
+
+    pub async fn process_command(&self, action: NodeAction, client: &reqwest::Client, addr: &str) -> Result<()> {
+        self.verify_action_is_valid(&action)?;
+        ducoapi::perform_action(client, addr, self.number(), action).await
+    }
 }
 
 impl TryFrom<ducoapi::NodeInfo> for DucoBoxNode {
@@ -156,10 +178,10 @@ impl TryFrom<ducoapi::NodeInfo> for DucoBoxNode {
     }
 }
 
-impl TryFrom<NodeAction> for DucoNodeAction {
+impl TryFrom<NodeActionDescription> for DucoNodeAction {
     type Error = Error;
 
-    fn try_from(action: NodeAction) -> Result<Self> {
+    fn try_from(action: NodeActionDescription) -> Result<Self> {
         match action.ValType.as_str() {
             "Enum" => Ok(DucoNodeAction::SetEnum(
                 action.Action,
@@ -187,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_duco_node_action() {
-        let action = NodeAction {
+        let action = NodeActionDescription {
             Action: "foo".to_string(),
             ValType: "Enum".to_string(),
             Enum: Some(vec!["bar".to_string()]),

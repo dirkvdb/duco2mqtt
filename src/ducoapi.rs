@@ -1,7 +1,7 @@
 use core::fmt;
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{Error, Result};
 
@@ -61,8 +61,15 @@ pub struct NodeInfo {
 }
 
 #[allow(non_snake_case)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize)]
 pub struct NodeAction {
+    pub Action: String,
+    pub Val: String,
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Deserialize)]
+pub struct NodeActionDescription {
     pub Action: String,
     pub ValType: String,
     pub Enum: Option<Vec<String>>,
@@ -72,7 +79,18 @@ pub struct NodeAction {
 #[derive(Debug, Deserialize)]
 pub struct NodeActions {
     pub Node: u16,
-    pub Actions: Vec<NodeAction>,
+    pub Actions: Vec<NodeActionDescription>,
+}
+
+pub async fn perform_action(client: &reqwest::Client, addr: &str, node: u16, action: NodeAction) -> Result<()> {
+    let url = format!("https://{}/action/nodes/{}", addr, node);
+    client
+        .post(url)
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .body(serde_json::to_string(&action)?)
+        .send()
+        .await?;
+    Ok(())
 }
 
 pub async fn get_nodes(client: &reqwest::Client, addr: &str) -> Result<Vec<NodeInfo>> {
