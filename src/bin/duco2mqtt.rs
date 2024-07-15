@@ -19,9 +19,13 @@ struct Opt {
     #[command(flatten)]
     verbose: clap_verbosity_flag::Verbosity<WarnLevel>,
 
-    // set the duco connectivity board address
-    #[clap(long = "duco-addr", env = "D2M_DUCO_ADDRESS")]
-    duco_addr: String,
+    // set the duco connectivity board host name
+    #[clap(long = "duco-host", env = "D2M_DUCO_HOST")]
+    duco_host: String,
+
+    // set the duco connectivity board ip address (optional, to avoid dns lookup)
+    #[clap(long = "duco-ip", env = "D2M_DUCO_IP_ADDRESS")]
+    duco_ip: Option<String>,
 
     #[clap(long = "duco-poll-interval", env = "D2M_POLL_INTERVAL", default_value_t = 60)]
     duco_poll_interval: u64,
@@ -64,7 +68,8 @@ async fn main() {
     log::info!("{} version {}", PACKAGE, VERSION);
 
     let cfg = DucoMqttBridgeConfig {
-        ducobox_address: opt.duco_addr.clone(),
+        ducobox_host: opt.duco_host.clone(),
+        ducobox_ip_address: opt.duco_ip.clone(),
         ducobox_certificate: opt.certificate.map(PathBuf::from),
         poll_interval: time::Duration::from_secs(opt.duco_poll_interval),
         mqtt_config: MqttConfig {

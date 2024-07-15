@@ -4,11 +4,20 @@ use crate::hassdiscovery::{self};
 use crate::mqtt::{MqttConfig, MqttConnection, MqttData};
 use crate::{ducoapi, Result};
 use anyhow::{anyhow, bail};
+use std::net::{SocketAddr, SocketAddrV4};
 use std::path::PathBuf;
 use tokio::time;
 
-fn http_client(ducobox_certificate: &Option<PathBuf>) -> Result<reqwest::Client> {
+fn http_client(
+    ducobox_certificate: &Option<PathBuf>,
+    domain: &str,
+    ip_addr: &Option<SocketAddr>,
+) -> Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder().connect_timeout(time::Duration::from_secs(15));
+
+    if let Some(addr) = ip_addr {
+        builder = builder.resolve(domain, *addr);
+    }
 
     if let Some(cert) = ducobox_certificate {
         builder = builder.use_rustls_tls();
@@ -23,7 +32,8 @@ fn http_client(ducobox_certificate: &Option<PathBuf>) -> Result<reqwest::Client>
 }
 
 pub struct DucoMqttBridgeConfig {
-    pub ducobox_address: String,
+    pub ducobox_host: String,
+    pub ducobox_ip_address: Option<String>,
     pub ducobox_certificate: Option<PathBuf>,
     pub mqtt_config: MqttConfig,
     pub hass_discovery: bool,
@@ -32,7 +42,8 @@ pub struct DucoMqttBridgeConfig {
 
 pub struct DucoMqttBridge {
     mqtt: MqttConnection,
-    ducobox_address: String,
+    ducobox_host: String,
+    ducobox_ip_address: Option<SocketAddr>,
     ducobox_certificate: Option<PathBuf>,
     poll_interval: time::Duration,
     nodes: Vec<DucoBoxNode>,
@@ -47,9 +58,14 @@ impl DucoMqttBridge {
             log::warn!("No certificate provided, disabling certificate validation");
         }
 
+        let ip_addr = cfg
+            .ducobox_ip_address
+            .map(|ip| format!("{}:443", ip).parse().expect("Invalid ip address"));
+
         DucoMqttBridge {
             mqtt: MqttConnection::new(cfg.mqtt_config),
-            ducobox_address: cfg.ducobox_address,
+            ducobox_host: cfg.ducobox_host,
+            ducobox_ip_address: ip_addr,
             ducobox_certificate: cfg.ducobox_certificate,
             poll_interval: cfg.poll_interval,
             nodes: Vec::new(),
@@ -72,8 +88,8 @@ impl DucoMqttBridge {
                     }
                 }
                 _ = interval.tick() => {
-
-                    if let Err(err) = self.poll_ducobox().await {
+                    let client = http_client(&self.ducobox_certificate, &self.ducobox_host, &self.ducobox_ip_address)?;
+                    if let Err(err) = self.poll_ducobox(&client).await {
                         log::error!("Failed to update duco status: {:#}", err);
                         self.reset_nodes();
                         let _ = self.mqtt.publish_offline().await;
@@ -85,10 +101,9 @@ impl DucoMqttBridge {
         }
     }
 
-    async fn discover_nodes(ducobox_address: &str, ducobox_certificate: &Option<PathBuf>) -> Result<Vec<DucoBoxNode>> {
-        let client = http_client(ducobox_certificate)?;
-        let nodes = ducoapi::get_nodes(&client, ducobox_address).await?;
-        let node_actions = ducoapi::get_node_actions(&client, ducobox_address).await?;
+    async fn discover_nodes(ducobox_address: &str, client: &reqwest::Client) -> Result<Vec<DucoBoxNode>> {
+        let nodes = ducoapi::get_nodes(client, ducobox_address).await?;
+        let node_actions = ducoapi::get_node_actions(client, ducobox_address).await?;
 
         if nodes.len() != node_actions.len() {
             return Err(anyhow!(
@@ -116,11 +131,11 @@ impl DucoMqttBridge {
         Ok(nodes)
     }
 
-    async fn poll_ducobox(&mut self) -> Result<()> {
+    async fn poll_ducobox(&mut self, client: &reqwest::Client) -> Result<()> {
         log::debug!("Update ducobox values");
 
         if self.nodes.is_empty() {
-            self.nodes = DucoMqttBridge::discover_nodes(&self.ducobox_address, &self.ducobox_certificate).await?;
+            self.nodes = DucoMqttBridge::discover_nodes(&self.ducobox_host, client).await?;
 
             if self.hass_discovery {
                 for node in self.nodes.iter() {
@@ -140,9 +155,7 @@ impl DucoMqttBridge {
                 }
             }
         } else {
-            let certificate = self.ducobox_certificate.clone();
-            let client = http_client(&certificate)?;
-            self.merge_nodes(ducoapi::get_nodes(&client, &self.ducobox_address).await?)?;
+            self.merge_nodes(ducoapi::get_nodes(client, &self.ducobox_host).await?)?;
         }
 
         self.publish_nodes().await?;
@@ -185,13 +198,13 @@ impl DucoMqttBridge {
         if let Some(path) = msg.topic.strip_prefix(self.mqtt_base_topic.as_str()) {
             let (node_nr, action_name) = DucoMqttBridge::node_and_action_from_topic(path)?;
 
-            let addr = self.ducobox_address.clone();
-            let client = http_client(&self.ducobox_certificate)?;
+            let addr = self.ducobox_host.clone();
+            let client = http_client(&self.ducobox_certificate, &self.ducobox_host, &self.ducobox_ip_address)?;
             let node = self.node_with_number(node_nr)?;
 
             node.process_command(action_name, msg.payload, &client, &addr).await?;
 
-            self.poll_ducobox().await?;
+            self.poll_ducobox(&client).await?;
             return Ok(());
         }
 
@@ -275,34 +288,6 @@ impl DucoMqttBridge {
 
         // for register in DucoBoxNode::supported_holding_registers(node.node_type()) {
         //     match register {
-        //         HoldingRegister::VentilationPosition => {
-        //             let mut select = create_select_for_register::<VentilationPosition, HoldingRegister>(
-        //                 node.number(),
-        //                 base_topic,
-        //                 register.to_string().as_str(),
-        //                 register,
-        //             );
-
-        //             select.icon = Some(String::from("mdi:fan"));
-
-        //             topics.push(MqttData {
-        //                 topic: format!("{}/select/{}/config", HASS_DISCOVERY_TOPIC, select.unique_id),
-        //                 payload: serde_json::to_string(&select)?,
-        //             })
-        //         }
-        //         HoldingRegister::Identification => {
-        //             let mut number =
-        //                 create_number_for_register(node.number(), base_topic, register.to_string().as_str(), register);
-
-        //             number.min = Some(0);
-        //             number.max = Some(1);
-        //             number.icon = Some(String::from("mdi:led-on"));
-
-        //             topics.push(MqttData {
-        //                 topic: format!("{}/number/{}/config", HASS_DISCOVERY_TOPIC, number.unique_id),
-        //                 payload: serde_json::to_string(&number)?,
-        //             })
-        //         }
         //         HoldingRegister::SupplyTemperatureTargetZone1 | HoldingRegister::SupplyTemperatureTargetZone2 => {
         //             let mut sensor =
         //                 create_number_for_register(node.number(), base_topic, register.to_string().as_str(), register);
