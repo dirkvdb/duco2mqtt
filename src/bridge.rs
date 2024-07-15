@@ -4,7 +4,7 @@ use crate::hassdiscovery::{self};
 use crate::mqtt::{MqttConfig, MqttConnection, MqttData};
 use crate::{ducoapi, Result};
 use anyhow::{anyhow, bail};
-use std::net::{SocketAddr, SocketAddrV4};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::time;
 
