@@ -146,17 +146,14 @@ impl DucoBoxNode {
 
     fn verify_enum_action_is_valid(&self, action: &NodeEnumAction) -> Result<()> {
         for node_action in &self.actions {
-            match node_action {
-                DucoNodeAction::SetEnum(ref action_name, ref values) => {
-                    if action_name == &action.Action {
-                        if !values.contains(&action.Val) {
-                            bail!("Invalid value for action '{}': '{}'", action.Action, action.Val);
-                        }
-
-                        return Ok(());
+            if let DucoNodeAction::SetEnum(ref action_name, ref values) = node_action {
+                if action_name == &action.Action {
+                    if !values.contains(&action.Val) {
+                        bail!("Invalid value for action '{}': '{}'", action.Action, action.Val);
                     }
+
+                    return Ok(());
                 }
-                _ => {}
             }
         }
 
@@ -165,13 +162,10 @@ impl DucoBoxNode {
 
     fn verify_bool_action_is_valid(&self, action: &NodeBoolAction) -> Result<()> {
         for node_action in &self.actions {
-            match node_action {
-                DucoNodeAction::SetBoolean(ref action_name) => {
-                    if *action_name == action.Action {
-                        return Ok(());
-                    }
+            if let DucoNodeAction::SetBoolean(ref action_name) = node_action {
+                if *action_name == action.Action {
+                    return Ok(());
                 }
-                _ => {}
             }
         }
 

@@ -11,7 +11,10 @@ fn http_client(ducobox_certificate: &Option<PathBuf>) -> Result<reqwest::Client>
     let mut builder = reqwest::Client::builder().connect_timeout(time::Duration::from_secs(15));
 
     if let Some(cert) = ducobox_certificate {
-        builder = builder.add_root_certificate(reqwest::Certificate::from_pem(&std::fs::read(cert)?)?);
+        builder = builder.use_rustls_tls();
+        for cert in reqwest::Certificate::from_pem_bundle(&std::fs::read(cert)?)? {
+            builder = builder.add_root_certificate(cert);
+        }
     } else {
         builder = builder.danger_accept_invalid_certs(true);
     }
