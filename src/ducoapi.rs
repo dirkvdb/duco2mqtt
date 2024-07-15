@@ -1,7 +1,7 @@
 use core::fmt;
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::{Error, Result};
@@ -63,9 +63,16 @@ pub struct NodeInfo {
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize)]
-pub struct NodeAction {
+pub struct NodeEnumAction {
     pub Action: String,
     pub Val: String,
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize)]
+pub struct NodeBoolAction {
+    pub Action: String,
+    pub Val: bool,
 }
 
 #[allow(non_snake_case)]
@@ -83,7 +90,12 @@ pub struct NodeActions {
     pub Actions: Vec<NodeActionDescription>,
 }
 
-pub async fn perform_action(client: &reqwest::Client, addr: &str, node: u16, action: NodeAction) -> Result<()> {
+pub async fn perform_action<T: serde::Serialize>(
+    client: &reqwest::Client,
+    addr: &str,
+    node: u16,
+    action: T,
+) -> Result<()> {
     let url = format!("https://{}/action/nodes/{}", addr, node);
     client
         .post(url)

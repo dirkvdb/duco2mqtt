@@ -1,7 +1,9 @@
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
-    ducoapi::{self, NodeAction, NodeActionDescription, NodeActions, NodeInfo, NodeStatusField, NodeValue},
+    ducoapi::{
+        self, NodeActionDescription, NodeActions, NodeBoolAction, NodeEnumAction, NodeInfo, NodeStatusField, NodeValue,
+    },
     duconodetypes::NodeType,
     mqtt::MqttData,
     Error, Result,
@@ -10,6 +12,9 @@ use crate::{
 use anyhow::{anyhow, bail};
 
 pub const UNKNOWN: &str = "UNKNOWN";
+pub const GENERAL: &str = "general";
+pub const VENTILATION: &str = "ventilation";
+pub const SENSOR: &str = "sensor";
 
 struct InfoValue {
     value: NodeValue,
@@ -60,6 +65,10 @@ impl DucoBoxNode {
         }
     }
 
+    pub fn node_type(&self) -> NodeType {
+        self.node_type
+    }
+
     pub fn number(&self) -> u16 {
         self.number
     }
@@ -86,6 +95,18 @@ impl DucoBoxNode {
         topics
     }
 
+    pub fn valid_action_values(&self, action_name: &str) -> Result<&[String]> {
+        for action in &self.actions {
+            if let DucoNodeAction::SetEnum(name, ref enum_values) = action {
+                if name == action_name {
+                    return Ok(enum_values);
+                }
+            }
+        }
+
+        Err(anyhow!("No valid values found for action '{}'", action_name))
+    }
+
     fn status_topic(node_number: u16, topic: &str) -> String {
         format!("duco_node_{}/{}", node_number, topic)
     }
@@ -104,10 +125,10 @@ impl DucoBoxNode {
     pub fn update_status(&mut self, node: NodeInfo) -> Result<()> {
         assert_eq!(self.number, node.Node, "Node number mismatch");
 
-        self.merge_status_values("general", node.General);
-        self.merge_status_values("ventilation", node.Ventilation);
+        self.merge_status_values(GENERAL, node.General);
+        self.merge_status_values(VENTILATION, node.Ventilation);
         if let Some(sensor) = node.Sensor {
-            self.merge_status_values("sensor", sensor);
+            self.merge_status_values(SENSOR, sensor);
         }
 
         Ok(())
@@ -123,14 +144,9 @@ impl DucoBoxNode {
         Ok(())
     }
 
-    fn verify_action_is_valid(&self, action: &NodeAction) -> Result<()> {
+    fn verify_enum_action_is_valid(&self, action: &NodeEnumAction) -> Result<()> {
         for node_action in &self.actions {
             match node_action {
-                DucoNodeAction::SetBoolean(ref action_name) => {
-                    if *action_name == action.Action {
-                        return Ok(());
-                    }
-                }
                 DucoNodeAction::SetEnum(ref action_name, ref values) => {
                     if action_name == &action.Action {
                         if !values.contains(&action.Val) {
@@ -140,14 +156,85 @@ impl DucoBoxNode {
                         return Ok(());
                     }
                 }
+                _ => {}
             }
         }
 
         Err(anyhow!("Invalid action for node {}: '{}'", self.number, action.Action))
     }
 
-    pub async fn process_command(&self, action: NodeAction, client: &reqwest::Client, addr: &str) -> Result<()> {
-        self.verify_action_is_valid(&action)?;
+    fn verify_bool_action_is_valid(&self, action: &NodeBoolAction) -> Result<()> {
+        for node_action in &self.actions {
+            match node_action {
+                DucoNodeAction::SetBoolean(ref action_name) => {
+                    if *action_name == action.Action {
+                        return Ok(());
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Err(anyhow!("Invalid action for node {}: '{}'", self.number, action.Action))
+    }
+
+    pub async fn process_command(
+        &self,
+        action_name: String,
+        data: String,
+        client: &reqwest::Client,
+        addr: &str,
+    ) -> Result<()> {
+        if let Some(action) = self.actions.iter().find(|action| match action {
+            DucoNodeAction::SetBoolean(name) => *name == action_name,
+            DucoNodeAction::SetEnum(name, _) => *name == action_name,
+        }) {
+            match action {
+                DucoNodeAction::SetEnum(_, _) => {
+                    let action = NodeEnumAction {
+                        Action: action_name,
+                        Val: data,
+                    };
+
+                    self.process_enum_command(action, client, addr).await?;
+                }
+                DucoNodeAction::SetBoolean(_) => {
+                    if data != "1" && data != "0" {
+                        bail!("Invalid value for action '{}': '{}'", action_name, data);
+                    }
+
+                    let action = NodeBoolAction {
+                        Action: action_name,
+                        Val: data == "1",
+                    };
+
+                    self.process_bool_command(action, client, addr).await?;
+                }
+            }
+        } else {
+            bail!("Invalid action for node {}: '{}'", self.number, action_name);
+        }
+
+        Ok(())
+    }
+
+    pub async fn process_enum_command(
+        &self,
+        action: NodeEnumAction,
+        client: &reqwest::Client,
+        addr: &str,
+    ) -> Result<()> {
+        self.verify_enum_action_is_valid(&action)?;
+        ducoapi::perform_action(client, addr, self.number(), action).await
+    }
+
+    pub async fn process_bool_command(
+        &self,
+        action: NodeBoolAction,
+        client: &reqwest::Client,
+        addr: &str,
+    ) -> Result<()> {
+        self.verify_bool_action_is_valid(&action)?;
         ducoapi::perform_action(client, addr, self.number(), action).await
     }
 }

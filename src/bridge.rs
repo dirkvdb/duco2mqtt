@@ -1,12 +1,11 @@
-use crate::ducoapi::{NodeAction, NodeInfo};
+use crate::ducoapi::NodeInfo;
 use crate::duxoboxnode::DucoBoxNode;
+use crate::hassdiscovery::{self};
 use crate::mqtt::{MqttConfig, MqttConnection, MqttData};
 use crate::{ducoapi, Result};
 use anyhow::{anyhow, bail};
 use std::path::PathBuf;
 use tokio::time;
-
-//const HASS_DISCOVERY_TOPIC: &str = "homeassistant";
 
 fn http_client(ducobox_certificate: &Option<PathBuf>) -> Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder().connect_timeout(time::Duration::from_secs(15));
@@ -122,11 +121,17 @@ impl DucoMqttBridge {
 
             if self.hass_discovery {
                 for node in self.nodes.iter() {
-                    if let Ok(mqtt_data) =
-                        DucoMqttBridge::create_home_assistant_descriptions_for_node(node, self.mqtt_base_topic.as_str())
-                    {
-                        for md in mqtt_data {
-                            self.mqtt.publish(md).await?;
+                    match DucoMqttBridge::create_home_assistant_descriptions_for_node(
+                        node,
+                        self.mqtt_base_topic.as_str(),
+                    ) {
+                        Ok(mqtt_data) => {
+                            for md in mqtt_data {
+                                self.mqtt.publish(md).await?;
+                            }
+                        }
+                        Err(err) => {
+                            log::error!("Failed to create home assistant descriptions: {:#}", err);
                         }
                     }
                 }
@@ -175,18 +180,13 @@ impl DucoMqttBridge {
 
     async fn handle_node_command(&mut self, msg: MqttData) -> Result<()> {
         if let Some(path) = msg.topic.strip_prefix(self.mqtt_base_topic.as_str()) {
-            let (node_nr, action) = DucoMqttBridge::node_and_action_from_topic(path)?;
+            let (node_nr, action_name) = DucoMqttBridge::node_and_action_from_topic(path)?;
 
             let addr = self.ducobox_address.clone();
             let client = http_client(&self.ducobox_certificate)?;
             let node = self.node_with_number(node_nr)?;
 
-            let action = NodeAction {
-                Action: action,
-                Val: msg.payload,
-            };
-
-            node.process_command(action, &client, &addr).await?;
+            node.process_command(action_name, msg.payload, &client, &addr).await?;
 
             self.poll_ducobox().await?;
             return Ok(());
@@ -225,8 +225,51 @@ impl DucoMqttBridge {
         }
     }
 
-    fn create_home_assistant_descriptions_for_node(_node: &DucoBoxNode, _base_topic: &str) -> Result<Vec<MqttData>> {
-        let topics = Vec::new();
+    fn create_home_assistant_descriptions_for_node(node: &DucoBoxNode, base_topic: &str) -> Result<Vec<MqttData>> {
+        let mut topics = Vec::new();
+
+        match node.node_type() {
+            crate::duconodetypes::NodeType::DucoBox => {
+                topics.push(hassdiscovery::ventilation_state_topic(
+                    node,
+                    base_topic,
+                    node.valid_action_values("SetVentilationState")?,
+                )?);
+                topics.push(hassdiscovery::flow_level_target_topic(node, base_topic)?);
+                topics.push(hassdiscovery::state_time_remaining_topic(node, base_topic)?);
+                topics.push(hassdiscovery::identify_topic(node, base_topic)?);
+            }
+            crate::duconodetypes::NodeType::CO2ControlValve => {
+                topics.push(hassdiscovery::ventilation_state_topic(
+                    node,
+                    base_topic,
+                    node.valid_action_values("SetVentilationState")?,
+                )?);
+                topics.push(hassdiscovery::flow_level_target_topic(node, base_topic)?);
+                topics.push(hassdiscovery::state_time_remaining_topic(node, base_topic)?);
+                topics.push(hassdiscovery::identify_topic(node, base_topic)?);
+            }
+            crate::duconodetypes::NodeType::CO2RoomSensor => {
+                topics.push(hassdiscovery::co2_sensor_topic(node, base_topic)?);
+                topics.push(hassdiscovery::identify_topic(node, base_topic)?);
+            }
+            crate::duconodetypes::NodeType::RemoteControlRFBAT => todo!(),
+            crate::duconodetypes::NodeType::RemoteControlRFWired => todo!(),
+            crate::duconodetypes::NodeType::HumidityRoomSensor => todo!(),
+            crate::duconodetypes::NodeType::SensorlessControlValve => todo!(),
+            crate::duconodetypes::NodeType::HumidityControlValve => todo!(),
+            crate::duconodetypes::NodeType::SwitchSensor => todo!(),
+            crate::duconodetypes::NodeType::ControlUnit => todo!(),
+            crate::duconodetypes::NodeType::CO2RHControlValve => todo!(),
+            crate::duconodetypes::NodeType::RemoteControlSunControlRFWired => todo!(),
+            crate::duconodetypes::NodeType::RemoteControlNightventRFWired => todo!(),
+            crate::duconodetypes::NodeType::ExternalMultiZoneValve => todo!(),
+            crate::duconodetypes::NodeType::HumidityBoxSensor => todo!(),
+            crate::duconodetypes::NodeType::CO2BoxSensors => todo!(),
+            crate::duconodetypes::NodeType::DucoWeatherStation => todo!(),
+            crate::duconodetypes::NodeType::Unknown => {}
+        }
+
         // for register in DucoBoxNode::supported_holding_registers(node.node_type()) {
         //     match register {
         //         HoldingRegister::VentilationPosition => {
