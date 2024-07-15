@@ -7,6 +7,8 @@ use crate::{
     Error, Result,
 };
 
+use anyhow::{anyhow, bail};
+
 pub const UNKNOWN: &str = "UNKNOWN";
 
 struct InfoValue {
@@ -132,10 +134,7 @@ impl DucoBoxNode {
                 DucoNodeAction::SetEnum(ref action_name, ref values) => {
                     if action_name == &action.Action {
                         if !values.contains(&action.Val) {
-                            return Err(Error::Runtime(format!(
-                                "Invalid value for action '{}': '{}'",
-                                action.Action, action.Val
-                            )));
+                            bail!("Invalid value for action '{}': '{}'", action.Action, action.Val);
                         }
 
                         return Ok(());
@@ -144,10 +143,7 @@ impl DucoBoxNode {
             }
         }
 
-        Err(Error::Runtime(format!(
-            "Invalid action for node {}: '{}'",
-            self.number, action.Action
-        )))
+        Err(anyhow!("Invalid action for node {}: '{}'", self.number, action.Action))
     }
 
     pub async fn process_command(&self, action: NodeAction, client: &reqwest::Client, addr: &str) -> Result<()> {
@@ -157,7 +153,7 @@ impl DucoBoxNode {
 }
 
 impl TryFrom<ducoapi::NodeInfo> for DucoBoxNode {
-    type Error = Error;
+    type Error = anyhow::Error;
 
     fn try_from(node_info: ducoapi::NodeInfo) -> Result<Self> {
         let NodeValue::String(ref type_str) = node_info
@@ -166,7 +162,7 @@ impl TryFrom<ducoapi::NodeInfo> for DucoBoxNode {
             .ok_or_else(|| Error::Runtime("Type missing".to_string()))?
             .Val
         else {
-            return Err(Error::Runtime("Node type is not a string value".to_string()));
+            bail!("Node type is not a string value");
         };
 
         let node_type =
@@ -179,7 +175,7 @@ impl TryFrom<ducoapi::NodeInfo> for DucoBoxNode {
 }
 
 impl TryFrom<NodeActionDescription> for DucoNodeAction {
-    type Error = Error;
+    type Error = anyhow::Error;
 
     fn try_from(action: NodeActionDescription) -> Result<Self> {
         match action.ValType.as_str() {
@@ -190,7 +186,7 @@ impl TryFrom<NodeActionDescription> for DucoNodeAction {
                     .ok_or_else(|| Error::Runtime("Enum values missing for action".to_string()))?,
             )),
             "Boolean" => Ok(DucoNodeAction::SetBoolean(action.Action)),
-            _ => Err(Error::Runtime(format!("Unsupported action type '{}'", action.ValType))),
+            _ => Err(anyhow!("Unsupported action type '{}'", action.ValType)),
         }
     }
 }

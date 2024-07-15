@@ -1,14 +1,16 @@
 use crate::ducoapi::{NodeAction, NodeInfo};
 use crate::duxoboxnode::DucoBoxNode;
 use crate::mqtt::{MqttConfig, MqttConnection, MqttData};
-use crate::{ducoapi, Error, Result};
+use crate::{ducoapi, Result};
+use anyhow::{anyhow, bail};
 use std::path::PathBuf;
 use tokio::time;
 
 //const HASS_DISCOVERY_TOPIC: &str = "homeassistant";
 
 fn http_client(ducobox_certificate: &Option<PathBuf>) -> Result<reqwest::Client> {
-    let mut builder = reqwest::Client::builder();
+    let mut builder = reqwest::Client::builder().connect_timeout(time::Duration::from_secs(15));
+
     if let Some(cert) = ducobox_certificate {
         builder = builder.add_root_certificate(reqwest::Certificate::from_pem(&std::fs::read(cert)?)?);
     } else {
@@ -63,14 +65,14 @@ impl DucoMqttBridge {
                     if let Ok(Some(msg)) = mqtt_msg {
                         log::info!("MQTT cmnd: {} {}", msg.topic, msg.payload);
                         if let Err(err) = self.handle_node_command(msg).await {
-                            log::error!("Failed to process command: {err}");
+                            log::error!("Failed to process command: {:#}", err);
                         }
                     }
                 }
                 _ = interval.tick() => {
 
                     if let Err(err) = self.poll_ducobox().await {
-                        log::error!("Failed to update duco status: {err}");
+                        log::error!("Failed to update duco status: {:#}", err);
                         self.reset_nodes();
                         let _ = self.mqtt.publish_offline().await;
                     } else {
@@ -87,11 +89,11 @@ impl DucoMqttBridge {
         let node_actions = ducoapi::get_node_actions(&client, ducobox_address).await?;
 
         if nodes.len() != node_actions.len() {
-            return Err(Error::Runtime(format!(
+            return Err(anyhow!(
                 "Node and action count mismatch ({} <-> {})",
                 nodes.len(),
                 node_actions.len()
-            )));
+            ));
         }
 
         let nodes = nodes
@@ -99,10 +101,7 @@ impl DucoMqttBridge {
             .zip(node_actions.into_iter())
             .map(|(node_info, actions)| {
                 if node_info.Node != actions.Node {
-                    return Err(Error::Runtime(format!(
-                        "Node mismatch ({} <-> {})",
-                        node_info.Node, actions.Node
-                    )));
+                    bail!("Node mismatch ({} <-> {})", node_info.Node, actions.Node);
                 }
 
                 let mut node = DucoBoxNode::try_from(node_info)?;
@@ -147,7 +146,7 @@ impl DucoMqttBridge {
         if let Some(node) = self.nodes.iter_mut().find(|x| x.number() == nr) {
             Ok(node)
         } else {
-            Err(Error::Runtime(format!("No node with id '{nr}'")))
+            Err(anyhow!(format!("No node with id '{nr}'")))
         }
     }
 
@@ -156,10 +155,10 @@ impl DucoMqttBridge {
         if parts.len() == 3 && parts[0] == "duco" && parts[1] == "node" {
             return parts[2]
                 .parse()
-                .map_err(|_| Error::Runtime(format!("Invalid node number '{}'", parts[2])));
+                .map_err(|_| anyhow!("Invalid node number '{}'", parts[2]));
         }
 
-        Err(Error::Runtime(format!("Invalid node topic provided: {}", topic)))
+        Err(anyhow!("Invalid node topic provided: {}", topic))
     }
 
     fn node_and_action_from_topic(topic: &str) -> Result<(u16, String)> {
@@ -171,10 +170,7 @@ impl DucoMqttBridge {
             return Ok((node, action));
         }
 
-        Err(Error::Runtime(format!(
-            "Invalid node topic provided: {} ({:?})",
-            topic, topics
-        )))
+        Err(anyhow!("Invalid node topic provided: {} ({:?})", topic, topics))
     }
 
     async fn handle_node_command(&mut self, msg: MqttData) -> Result<()> {
@@ -196,7 +192,7 @@ impl DucoMqttBridge {
             return Ok(());
         }
 
-        Err(Error::Runtime(format!("Unexpected command path: {}", msg.topic)))
+        Err(anyhow!("Unexpected command path: {}", msg.topic))
     }
 
     fn merge_nodes(&mut self, new_nodes: Vec<NodeInfo>) -> Result<()> {

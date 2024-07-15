@@ -36,4 +36,4 @@ pub enum Error {
     RequestError(#[from] reqwest::Error),
 }
 
-type Result<T> = std::result::Result<T, Error>;
+type Result<T> = anyhow::Result<T>;

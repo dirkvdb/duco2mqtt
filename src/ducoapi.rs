@@ -1,6 +1,7 @@
 use core::fmt;
 use std::collections::HashMap;
 
+use anyhow::{anyhow, Context};
 use serde::{Deserialize, Serialize};
 
 use crate::{Error, Result};
@@ -89,29 +90,23 @@ pub async fn perform_action(client: &reqwest::Client, addr: &str, node: u16, act
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .body(serde_json::to_string(&action)?)
         .send()
-        .await?;
+        .await
+        .context("Failed to perform node action")?;
     Ok(())
 }
 
 pub async fn get_nodes(client: &reqwest::Client, addr: &str) -> Result<Vec<NodeInfo>> {
     let url = format!("https://{}/info/nodes", addr);
-    match client.get(&url).send().await {
-        Ok(response) => {
-            let json_data = response.bytes().await?;
-            let mut nodes = parse_node_info(&json_data)?;
-            nodes.sort_by(|a, b| a.Node.cmp(&b.Node));
-            Ok(nodes)
-        }
-        Err(err) => {
-            dbg!(&err);
-            Err(Error::RequestError(err))
-        }
-    }
+    let response = client.get(&url).send().await.context("Failed to obtain nodes")?;
+    let json_data = response.bytes().await?;
+    let mut nodes = parse_node_info(&json_data)?;
+    nodes.sort_by(|a, b| a.Node.cmp(&b.Node));
+    Ok(nodes)
 }
 
 pub async fn get_node_actions(client: &reqwest::Client, addr: &str) -> Result<Vec<NodeActions>> {
     let url = format!("https://{}/action/nodes", addr);
-    let response = client.get(&url).send().await?;
+    let response = client.get(&url).send().await.context("Failed to obtain node actions")?;
     let json_data = response.bytes().await?;
     let mut nodes = parse_node_actions(&json_data)?;
 
