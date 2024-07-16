@@ -4,7 +4,7 @@ use crate::ducoboxnode::DucoBoxNode;
 use crate::hassdiscovery::{self};
 use crate::mqtt::{MqttConfig, MqttConnection, MqttData};
 use crate::{ducoapi, Result};
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, ensure};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::time;
@@ -85,21 +85,23 @@ impl DucoMqttBridge {
         let nodes = ducoapi::get_nodes(client, ducobox_address).await?;
         let node_actions = ducoapi::get_node_actions(client, ducobox_address).await?;
 
-        if nodes.len() != node_actions.len() {
-            return Err(anyhow!(
-                "Node and action count mismatch ({} <-> {})",
-                nodes.len(),
-                node_actions.len()
-            ));
-        }
+        ensure!(
+            nodes.len() == node_actions.len(),
+            "Node and action count mismatch ({} <-> {})",
+            nodes.len(),
+            node_actions.len()
+        );
 
         let nodes = nodes
             .into_iter()
             .zip(node_actions.into_iter())
             .map(|(node_info, actions)| {
-                if node_info.Node != actions.Node {
-                    bail!("Node mismatch ({} <-> {})", node_info.Node, actions.Node);
-                }
+                ensure!(
+                    node_info.Node == actions.Node,
+                    "Node mismatch ({} <-> {})",
+                    node_info.Node,
+                    actions.Node
+                );
 
                 let mut node = DucoBoxNode::try_from(node_info)?;
                 node.set_actions(actions)?;
@@ -117,12 +119,8 @@ impl DucoMqttBridge {
         let dev = DucoBoxDevice::try_from(ducoapi::get_device_info(client, &self.ducobox_host).await?)?;
 
         if self.device_info.is_none() && self.hass_discovery {
-            if let Ok(mqtt_data) =
-                DucoMqttBridge::create_home_assistant_descriptions_for_device(self.mqtt_base_topic.as_str())
-            {
-                for md in mqtt_data {
-                    self.mqtt.publish(md).await?;
-                }
+            if let Ok(mqtt_data) = DucoMqttBridge::create_hass_descriptions_for_device(&self.mqtt_base_topic) {
+                self.mqtt.publish_multiple(mqtt_data).await?;
             }
         }
 
@@ -132,15 +130,10 @@ impl DucoMqttBridge {
             self.nodes = DucoMqttBridge::discover_nodes(&self.ducobox_host, client).await?;
 
             if self.hass_discovery {
-                for node in self.nodes.iter() {
-                    match DucoMqttBridge::create_home_assistant_descriptions_for_node(
-                        node,
-                        self.mqtt_base_topic.as_str(),
-                    ) {
+                for node in &self.nodes {
+                    match DucoMqttBridge::create_hass_descriptions_for_node(node, &self.mqtt_base_topic) {
                         Ok(mqtt_data) => {
-                            for md in mqtt_data {
-                                self.mqtt.publish(md).await?;
-                            }
+                            self.mqtt.publish_multiple(mqtt_data).await?;
                         }
                         Err(err) => {
                             log::error!("Failed to create home assistant descriptions: {:#}", err);
@@ -162,7 +155,7 @@ impl DucoMqttBridge {
         if let Some(node) = self.nodes.iter_mut().find(|x| x.number() == nr) {
             Ok(node)
         } else {
-            Err(anyhow!(format!("No node with id '{nr}'")))
+            Err(anyhow!("No node with id '{nr}'"))
         }
     }
 
@@ -251,25 +244,15 @@ impl DucoMqttBridge {
         }
     }
 
-    fn create_home_assistant_descriptions_for_device(base_topic: &str) -> Result<Vec<MqttData>> {
+    fn create_hass_descriptions_for_device(base_topic: &str) -> Result<Vec<MqttData>> {
         Ok(vec![hassdiscovery::filter_days_remaining_topic(base_topic)?])
     }
 
-    fn create_home_assistant_descriptions_for_node(node: &DucoBoxNode, base_topic: &str) -> Result<Vec<MqttData>> {
+    fn create_hass_descriptions_for_node(node: &DucoBoxNode, base_topic: &str) -> Result<Vec<MqttData>> {
         let mut topics = Vec::new();
 
         match node.node_type() {
-            crate::duconodetypes::NodeType::DucoBox => {
-                topics.push(hassdiscovery::ventilation_state_topic(
-                    node,
-                    base_topic,
-                    node.valid_action_values("SetVentilationState")?,
-                )?);
-                topics.push(hassdiscovery::flow_level_target_topic(node, base_topic)?);
-                topics.push(hassdiscovery::state_time_remaining_topic(node, base_topic)?);
-                topics.push(hassdiscovery::identify_topic(node, base_topic)?);
-            }
-            crate::duconodetypes::NodeType::CO2ControlValve => {
+            crate::duconodetypes::NodeType::DucoBox | crate::duconodetypes::NodeType::CO2ControlValve => {
                 topics.push(hassdiscovery::ventilation_state_topic(
                     node,
                     base_topic,

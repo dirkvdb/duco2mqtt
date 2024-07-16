@@ -1,3 +1,5 @@
+use crate::Result;
+use anyhow::anyhow;
 use std::time::Duration;
 
 use rumqttc::v5::{
@@ -7,8 +9,6 @@ use rumqttc::v5::{
     },
     AsyncClient, Event, EventLoop, MqttOptions,
 };
-
-use crate::Error;
 
 #[derive(Clone)]
 pub struct MqttConfig {
@@ -54,10 +54,10 @@ pub struct MqttConnection {
     online: bool,
 }
 
-fn from_mqtt_string(stream: &bytes::Bytes) -> Result<String, Error> {
+fn from_mqtt_string(stream: &bytes::Bytes) -> Result<String> {
     match String::from_utf8(stream.to_vec()) {
         Ok(v) => Ok(v),
-        Err(e) => Err(Error::Utf8Error(e.utf8_error())),
+        Err(e) => Err(anyhow!("Mqtt string conversion error: {}", e)),
     }
 }
 
@@ -96,7 +96,7 @@ impl MqttConnection {
         }
     }
 
-    pub async fn poll(&mut self) -> Result<Option<MqttData>, Error> {
+    pub async fn poll(&mut self) -> Result<Option<MqttData>> {
         if let Ok(msg) = self.eventloop.poll().await {
             return self.handle_mqtt_message(msg).await;
         }
@@ -104,20 +104,28 @@ impl MqttConnection {
         Ok(None)
     }
 
-    pub async fn publish(&mut self, data: MqttData) -> Result<(), Error> {
+    pub async fn publish(&mut self, data: MqttData) -> Result<()> {
         Ok(self
             .client
             .publish(data.topic, QoS::AtLeastOnce, true, data.payload)
             .await?)
     }
 
-    async fn subscribe_to_commands(&mut self) -> Result<(), Error> {
+    pub async fn publish_multiple(&mut self, data: Vec<MqttData>) -> Result<()> {
+        for d in data {
+            self.publish(d).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn subscribe_to_commands(&mut self) -> Result<()> {
         let cmd_subscription_topic = format!("{}/+/cmnd/+", self.base_topic);
         self.client.subscribe(cmd_subscription_topic, QoS::ExactlyOnce).await?;
         Ok(())
     }
 
-    pub async fn publish_online(&mut self) -> Result<(), Error> {
+    pub async fn publish_online(&mut self) -> Result<()> {
         if !self.online {
             self.client
                 .publish(state_topic(&self.base_topic), QoS::AtLeastOnce, true, ONLINE_PAYLOAD)
@@ -128,7 +136,7 @@ impl MqttConnection {
         Ok(())
     }
 
-    pub async fn publish_offline(&mut self) -> Result<(), Error> {
+    pub async fn publish_offline(&mut self) -> Result<()> {
         if self.online {
             self.client
                 .publish(state_topic(&self.base_topic), QoS::AtLeastOnce, true, OFFLINE_PAYLOAD)
@@ -140,7 +148,7 @@ impl MqttConnection {
         Ok(())
     }
 
-    async fn handle_mqtt_message(&mut self, ev: Event) -> Result<Option<MqttData>, Error> {
+    async fn handle_mqtt_message(&mut self, ev: Event) -> Result<Option<MqttData>> {
         if let Event::Incoming(event) = ev {
             match event {
                 Packet::ConnAck(data) => {
