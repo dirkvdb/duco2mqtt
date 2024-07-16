@@ -2,46 +2,19 @@ use std::{collections::HashMap, str::FromStr};
 
 use crate::{
     ducoapi::{
-        self, NodeActionDescription, NodeActions, NodeBoolAction, NodeEnumAction, NodeInfo, NodeStatusField, NodeValue,
+        self, NodeActionDescription, NodeActions, NodeBoolAction, NodeEnumAction, NodeInfo, StatusValue, StatusField,
     },
     duconodetypes::NodeType,
+    infovalue::{InfoValue, UNKNOWN},
     mqtt::MqttData,
     Error, Result,
 };
 
 use anyhow::{anyhow, bail};
 
-pub const UNKNOWN: &str = "UNKNOWN";
 pub const GENERAL: &str = "general";
 pub const VENTILATION: &str = "ventilation";
 pub const SENSOR: &str = "sensor";
-
-struct InfoValue {
-    value: NodeValue,
-    modified: bool,
-}
-
-impl InfoValue {
-    fn new(value: NodeValue) -> Self {
-        Self { value, modified: true }
-    }
-
-    fn set(&mut self, val: NodeValue) {
-        if val != self.value {
-            self.modified = true;
-            self.value = val;
-        }
-    }
-
-    fn modified(&self) -> bool {
-        self.modified
-    }
-
-    fn get_and_reset(&mut self) -> NodeValue {
-        self.modified = false;
-        self.value.clone()
-    }
-}
 
 pub enum DucoNodeAction {
     SetBoolean(String),
@@ -75,7 +48,7 @@ impl DucoBoxNode {
 
     pub fn reset(&mut self) {
         for (_key, value) in self.status.iter_mut() {
-            value.set(NodeValue::String(UNKNOWN.to_string()))
+            value.set(StatusValue::String(UNKNOWN.to_string()))
         }
     }
 
@@ -111,7 +84,7 @@ impl DucoBoxNode {
         format!("duco_node_{}/{}", node_number, topic)
     }
 
-    fn merge_status_values(&mut self, sub_topic: &str, values: HashMap<String, NodeStatusField>) {
+    fn merge_status_values(&mut self, sub_topic: &str, values: HashMap<String, StatusField>) {
         for (name, value) in values {
             let key = format!("{sub_topic}/{name}");
             if let Some(info_value) = self.status.get_mut(&key) {
@@ -237,7 +210,7 @@ impl TryFrom<ducoapi::NodeInfo> for DucoBoxNode {
     type Error = anyhow::Error;
 
     fn try_from(node_info: ducoapi::NodeInfo) -> Result<Self> {
-        let NodeValue::String(ref type_str) = node_info
+        let StatusValue::String(ref type_str) = node_info
             .General
             .get("Type")
             .ok_or_else(|| Error::Runtime("Type missing".to_string()))?
@@ -278,9 +251,9 @@ mod tests {
 
     #[test]
     fn test_info_value() {
-        let mut val = InfoValue::new(NodeValue::String("foo".to_string()));
+        let mut val = InfoValue::new(StatusValue::String("foo".to_string()));
         assert!(val.modified());
-        assert_eq!(val.get_and_reset(), NodeValue::String("foo".to_string()));
+        assert_eq!(val.get_and_reset(), StatusValue::String("foo".to_string()));
         assert!(!val.modified());
     }
 
@@ -306,8 +279,8 @@ mod tests {
         let node_info = NodeInfo {
             Node: 1,
             General: HashMap::from([
-                ("Type".to_string(), NodeStatusField::from("BOX")),
-                ("SubType".to_string(), NodeStatusField::from(1)),
+                ("Type".to_string(), StatusField::from("BOX")),
+                ("SubType".to_string(), StatusField::from(1)),
             ]),
             Ventilation: HashMap::new(),
             Sensor: None,
@@ -329,8 +302,8 @@ mod tests {
         let node_info_update = NodeInfo {
             Node: 1,
             General: HashMap::from([
-                ("SubType".to_string(), NodeStatusField::from(2)),
-                ("Type".to_string(), NodeStatusField::from("BOX")),
+                ("SubType".to_string(), StatusField::from(2)),
+                ("Type".to_string(), StatusField::from("BOX")),
             ]),
             Ventilation: HashMap::new(),
             Sensor: None,

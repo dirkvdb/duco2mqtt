@@ -1,7 +1,7 @@
 use crate::Result;
 use serde::Serialize;
 
-use crate::{duxoboxnode::DucoBoxNode, mqtt::MqttData};
+use crate::{ducoboxnode::DucoBoxNode, mqtt::MqttData};
 
 const HASS_DISCOVERY_TOPIC: &str = "homeassistant";
 
@@ -182,6 +182,27 @@ pub fn ventilation_state_topic(node: &DucoBoxNode, base_topic: &str, valid_state
     Ok(MqttData {
         topic: format!("{}/select/{}/config", HASS_DISCOVERY_TOPIC, select.unique_id),
         payload: serde_json::to_string(&select)?,
+    })
+}
+
+pub fn filter_days_remaining_topic(base_topic: &str) -> Result<MqttData> {
+    let unique_id = "duco_device_remaining_filter_days".to_string();
+
+    let sensor = Sensor {
+        origin: Origin::duco2mqtt(),
+        name: "Remaining filter days".to_string(),
+        obj_id: unique_id.clone(),
+        unique_id,
+        stat_t: format!("{}HeatRecovery/General/TimeFilterRemain", base_topic),
+        avty_t: format!("{}state", base_topic),
+        state_class: Some("measurement".to_string()),
+        unit_of_measurement: Some("days".to_string()),
+        icon: Some("mdi:calendar-clock".to_string()),
+    };
+
+    Ok(MqttData {
+        topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
+        payload: serde_json::to_string(&sensor)?,
     })
 }
 

@@ -1,5 +1,6 @@
 use crate::ducoapi::NodeInfo;
-use crate::duxoboxnode::DucoBoxNode;
+use crate::ducoboxdevice::DucoBoxDevice;
+use crate::ducoboxnode::DucoBoxNode;
 use crate::hassdiscovery::{self};
 use crate::mqtt::{MqttConfig, MqttConnection, MqttData};
 use crate::{ducoapi, Result};
@@ -46,6 +47,7 @@ pub struct DucoMqttBridge {
     ducobox_ip_address: Option<SocketAddr>,
     ducobox_certificate: Option<PathBuf>,
     poll_interval: time::Duration,
+    device_info: Option<DucoBoxDevice>,
     nodes: Vec<DucoBoxNode>,
     mqtt_base_topic: String,
     hass_discovery: bool,
@@ -68,6 +70,7 @@ impl DucoMqttBridge {
             ducobox_ip_address: ip_addr,
             ducobox_certificate: cfg.ducobox_certificate,
             poll_interval: cfg.poll_interval,
+            device_info: None,
             nodes: Vec::new(),
             mqtt_base_topic,
             hass_discovery: cfg.hass_discovery,
@@ -91,7 +94,7 @@ impl DucoMqttBridge {
                     let client = http_client(&self.ducobox_certificate, &self.ducobox_host, &self.ducobox_ip_address)?;
                     if let Err(err) = self.poll_ducobox(&client).await {
                         log::error!("Failed to update duco status: {:#}", err);
-                        self.reset_nodes();
+                        self.reset_status();
                         let _ = self.mqtt.publish_offline().await;
                     } else {
                         let _ = self.mqtt.publish_online().await;
@@ -134,6 +137,20 @@ impl DucoMqttBridge {
     async fn poll_ducobox(&mut self, client: &reqwest::Client) -> Result<()> {
         log::debug!("Update ducobox values");
 
+        let dev = DucoBoxDevice::try_from(ducoapi::get_device_info(client, &self.ducobox_host).await?)?;
+
+        if self.device_info.is_none() && self.hass_discovery {
+            if let Ok(mqtt_data) =
+                DucoMqttBridge::create_home_assistant_descriptions_for_device(self.mqtt_base_topic.as_str())
+            {
+                for md in mqtt_data {
+                    self.mqtt.publish(md).await?;
+                }
+            }
+        }
+
+        self.device_info = Some(dev);
+
         if self.nodes.is_empty() {
             self.nodes = DucoMqttBridge::discover_nodes(&self.ducobox_host, client).await?;
 
@@ -158,6 +175,7 @@ impl DucoMqttBridge {
             self.merge_nodes(ducoapi::get_nodes(client, &self.ducobox_host).await?)?;
         }
 
+        self.publish_device_info().await?;
         self.publish_nodes().await?;
 
         Ok(())
@@ -223,6 +241,18 @@ impl DucoMqttBridge {
         Ok(())
     }
 
+    async fn publish_device_info(&mut self) -> Result<()> {
+        if let Some(ref mut device_info) = &mut self.device_info {
+            for mut mqtt_data in device_info.topics_that_need_updating() {
+                mqtt_data.topic = format!("{}{}", self.mqtt_base_topic, mqtt_data.topic);
+                log::info!("{}: {}", mqtt_data.topic, mqtt_data.payload);
+                self.mqtt.publish(mqtt_data).await?;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn publish_nodes(&mut self) -> Result<()> {
         for node in self.nodes.iter_mut() {
             for mut mqtt_data in node.topics_that_need_updating() {
@@ -235,10 +265,17 @@ impl DucoMqttBridge {
         Ok(())
     }
 
-    fn reset_nodes(&mut self) {
+    fn reset_status(&mut self) {
+        if let Some(ref mut device_info) = &mut self.device_info {
+            device_info.reset();
+        }
         for node in self.nodes.iter_mut() {
             node.reset();
         }
+    }
+
+    fn create_home_assistant_descriptions_for_device(base_topic: &str) -> Result<Vec<MqttData>> {
+        Ok(vec![hassdiscovery::filter_days_remaining_topic(base_topic)?])
     }
 
     fn create_home_assistant_descriptions_for_node(node: &DucoBoxNode, base_topic: &str) -> Result<Vec<MqttData>> {
@@ -305,39 +342,6 @@ impl DucoMqttBridge {
         //             log::debug!("{:?}", topics.last().unwrap());
         //         }
         //     }
-        // }
-
-        // for register in DucoBoxNode::supported_input_registers(node.node_type()) {
-        //     let mut sensor =
-        //         create_sensor_for_register(node.number(), base_topic, register.to_string().as_str(), register);
-        //     sensor.state_class = Some(String::from("measurement"));
-
-        //     match register {
-        //         InputRegister::FlowRateVsTargetLevel => {
-        //             sensor.unit_of_measurement = Some(String::from("%"));
-        //             sensor.icon = Some(String::from("mdi:fan-clock"));
-        //         }
-        //         InputRegister::IndoorAirQualityBasedOnCO2 => {
-        //             sensor.unit_of_measurement = Some(String::from("%"));
-        //             sensor.icon = Some(String::from("mdi:molecule-co2"));
-        //         }
-        //         InputRegister::FilterTimeRemaining => {
-        //             sensor.unit_of_measurement = Some(String::from("days"));
-        //             sensor.icon = Some(String::from("mdi:calendar-clock"));
-        //         }
-        //         InputRegister::RemainingTimeCurrentVenilationMode => {
-        //             sensor.unit_of_measurement = Some(String::from("seconds"));
-        //             sensor.icon = Some(String::from("mdi:timer"));
-        //         }
-        //         _ => {
-        //             continue;
-        //         }
-        //     }
-
-        //     topics.push(MqttData {
-        //         topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
-        //         payload: serde_json::to_string(&sensor)?,
-        //     })
         // }
 
         Ok(topics)

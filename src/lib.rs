@@ -3,9 +3,11 @@ use thiserror::Error;
 
 pub mod bridge;
 mod ducoapi;
+mod ducoboxdevice;
+mod ducoboxnode;
 mod duconodetypes;
-mod duxoboxnode;
 mod hassdiscovery;
+mod infovalue;
 pub mod mqtt;
 
 extern crate num;

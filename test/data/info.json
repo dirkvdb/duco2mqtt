@@ -1,0 +1,65 @@
+{
+    "General": {
+        "Board": {
+            "PublicApiVersion": {
+                "Val": "2.0"
+            },
+            "BoxName": {
+                "Val": "ENERGY"
+            },
+            "BoxSubTypeName": {
+                "Val": "PREMIUM_400_2ZH_R"
+            },
+            "SerialBoardBox": {
+                "Val": "PS0000000000"
+            },
+            "SerialBoardComm": {
+                "Val": "PS0000000000"
+            },
+            "SerialDucoBox": {
+                "Val": ""
+            },
+            "SerialDucoComm": {
+                "Val": "P289XXX-XXXXXX-XXX"
+            },
+            "Time": {
+                "Val": 1716834611
+            }
+        },
+        "Lan": {
+            "Mode": {
+                "Val": "ETHERNET"
+            },
+            "Ip": {
+                "Val": "192.168.1.39"
+            },
+            "NetMask": {
+                "Val": "255.255.255.0"
+            },
+            "DefaultGateway": {
+                "Val": "192.168.1.1"
+            },
+            "Dns": {
+                "Val": "0.0.0.0"
+            },
+            "Mac": {
+                "Val": "b1:b1:b1:b1:b1:b1"
+            },
+            "HostName": {
+                "Val": "duco_56dfcf"
+            },
+            "DucoClientIp": {
+                "Val": "0.0.0.0"
+            },
+            "ScanWifi": []
+        }
+    },
+    "Diag": {},
+    "HeatRecovery": {
+        "General": {
+            "TimeFilterRemain": {
+                "Val": 59
+            }
+        }
+    }
+}
