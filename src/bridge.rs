@@ -9,29 +9,6 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use tokio::time;
 
-fn http_client(
-    ducobox_certificate: &Option<PathBuf>,
-    domain: &str,
-    ip_addr: &Option<SocketAddr>,
-) -> Result<reqwest::Client> {
-    let mut builder = reqwest::Client::builder().connect_timeout(time::Duration::from_secs(15));
-
-    if let Some(addr) = ip_addr {
-        builder = builder.resolve(domain, *addr);
-    }
-
-    if let Some(cert) = ducobox_certificate {
-        builder = builder.use_rustls_tls();
-        for cert in reqwest::Certificate::from_pem_bundle(&std::fs::read(cert)?)? {
-            builder = builder.add_root_certificate(cert);
-        }
-    } else {
-        builder = builder.danger_accept_invalid_certs(true);
-    }
-
-    Ok(builder.build()?)
-}
-
 pub struct DucoMqttBridgeConfig {
     pub ducobox_host: String,
     pub ducobox_ip_address: Option<String>,
@@ -91,7 +68,7 @@ impl DucoMqttBridge {
                     }
                 }
                 _ = interval.tick() => {
-                    let client = http_client(&self.ducobox_certificate, &self.ducobox_host, &self.ducobox_ip_address)?;
+                    let client = self.http_client()?;
                     if let Err(err) = self.poll_ducobox(&client).await {
                         log::error!("Failed to update duco status: {:#}", err);
                         self.reset_status();
@@ -217,7 +194,7 @@ impl DucoMqttBridge {
             let (node_nr, action_name) = DucoMqttBridge::node_and_action_from_topic(path)?;
 
             let addr = self.ducobox_host.clone();
-            let client = http_client(&self.ducobox_certificate, &self.ducobox_host, &self.ducobox_ip_address)?;
+            let client = self.http_client()?;
             let node = self.node_with_number(node_nr)?;
 
             node.process_command(action_name, msg.payload, &client, &addr).await?;
@@ -346,6 +323,25 @@ impl DucoMqttBridge {
 
         Ok(topics)
     }
+
+    fn http_client(&self) -> Result<reqwest::Client> {
+        let mut builder = reqwest::Client::builder().connect_timeout(time::Duration::from_secs(15));
+
+        if let Some(addr) = self.ducobox_ip_address {
+            builder = builder.resolve(&self.ducobox_host, addr);
+        }
+
+        if let Some(ref cert) = self.ducobox_certificate {
+            builder = builder.use_rustls_tls();
+            for cert in reqwest::Certificate::from_pem_bundle(&std::fs::read(cert)?)? {
+                builder = builder.add_root_certificate(cert);
+            }
+        } else {
+            builder = builder.danger_accept_invalid_certs(true);
+        }
+
+        Ok(builder.build()?)
+    }
 }
 
 // Test for parsing node topics
@@ -365,11 +361,11 @@ mod tests {
     #[test]
     fn test_node_number_command_from_topic() {
         assert_eq!(
-            DucoMqttBridge::node_and_action_from_topic("node_1/cmnd/SetVentilationState").unwrap(),
+            DucoMqttBridge::node_and_action_from_topic("duco_node_1/cmnd/SetVentilationState").unwrap(),
             (1, "SetVentilationState".to_string())
         );
         assert_eq!(
-            DucoMqttBridge::node_and_action_from_topic("node_2/cmnd/SetIdentify").unwrap(),
+            DucoMqttBridge::node_and_action_from_topic("duco_node_2/cmnd/SetIdentify").unwrap(),
             (2, "SetIdentify".to_string())
         );
     }

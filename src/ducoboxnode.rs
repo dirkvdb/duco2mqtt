@@ -2,7 +2,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use crate::{
     ducoapi::{
-        self, NodeActionDescription, NodeActions, NodeBoolAction, NodeEnumAction, NodeInfo, StatusValue, StatusField,
+        self, NodeActionDescription, NodeActions, NodeBoolAction, NodeEnumAction, NodeInfo, StatusField, StatusValue,
     },
     duconodetypes::NodeType,
     infovalue::{InfoValue, UNKNOWN},
@@ -294,8 +294,8 @@ mod tests {
         assert_eq!(
             topics,
             vec![
-                MqttData::new("node_1/general/SubType", "1"),
-                MqttData::new("node_1/general/Type", "BOX")
+                MqttData::new("duco_node_1/general/SubType", "1"),
+                MqttData::new("duco_node_1/general/Type", "BOX")
             ]
         );
 
@@ -312,7 +312,7 @@ mod tests {
         node.update_status(node_info_update.clone()).unwrap();
         assert_eq!(
             node.topics_that_need_updating(),
-            vec![MqttData::new("node_1/general/SubType", "2"),]
+            vec![MqttData::new("duco_node_1/general/SubType", "2"),]
         );
 
         node.update_status(node_info_update.clone()).unwrap();
