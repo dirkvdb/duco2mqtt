@@ -37,10 +37,11 @@ impl DucoBoxDevice {
 
     fn merge_status_values(&mut self, values: HashMap<String, StatusField>) {
         for (name, value) in values {
-            if let Some(info_value) = self.status.get_mut(&name) {
-                info_value.set(value.Val);
-            } else {
-                self.status.insert(name, InfoValue::new(value.Val));
+            match self.status.get_mut(&name) {
+                Some(info_value) => info_value.set(value.Val),
+                None => {
+                    self.status.insert(name, InfoValue::new(value.Val));
+                }
             }
         }
     }

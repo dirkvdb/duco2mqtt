@@ -1,11 +1,11 @@
 use core::fmt;
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ducoboxnode::{GENERAL, SENSOR, VENTILATION},
+    ducoboxnode::{GENERAL, HEAT_RECOVERY, SENSOR, VENTILATION},
     Result,
 };
 
@@ -42,7 +42,7 @@ pub struct StatusField {
 impl From<&str> for StatusField {
     fn from(val: &str) -> StatusField {
         StatusField {
-            Val: StatusValue::String(String::from(val)),
+            Val: StatusValue::String(val.to_string()),
         }
     }
 }
@@ -172,28 +172,23 @@ fn parse_optional_status_map(
 
 pub fn parse_node_info(json_data: &[u8]) -> Result<Vec<NodeInfo>> {
     let mut data: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(json_data)?;
+    let mut json_nodes = data.remove("Nodes").ok_or_else(|| anyhow!("Missing nodes list"))?;
+    let Some(node_values) = json_nodes.as_array_mut() else {
+        bail!("Expected nodes to be an array: {:?}", json_nodes);
+    };
 
-    let mut nodes = Vec::new();
-    for (k, values) in data.iter_mut() {
-        if k == "Nodes" {
-            if let Some(node_values) = values.as_array_mut() {
-                for node in node_values {
-                    if node.is_object() {
-                        let node = node.as_object_mut().expect("unexpected node");
-
-                        nodes.push(NodeInfo {
-                            Node: parse_node_id(node.get("Node").ok_or_else(|| anyhow!("Missing node number"))?)?,
-                            General: parse_status_map(GENERAL, node)?,
-                            Ventilation: parse_status_map(VENTILATION, node)?,
-                            Sensor: parse_optional_status_map(SENSOR, node)?,
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(nodes)
+    node_values
+        .iter_mut()
+        .map(|node| -> Result<NodeInfo> {
+            let node = node.as_object_mut().ok_or_else(|| anyhow!("Invalid node object"))?;
+            Ok(NodeInfo {
+                Node: parse_node_id(node.get("Node").ok_or_else(|| anyhow!("Missing node number"))?)?,
+                General: parse_status_map(GENERAL, node)?,
+                Ventilation: parse_status_map(VENTILATION, node)?,
+                Sensor: parse_optional_status_map(SENSOR, node)?,
+            })
+        })
+        .collect()
 }
 
 pub fn parse_device_info(json_data: &[u8]) -> Result<DeviceInfo> {
@@ -204,15 +199,17 @@ pub fn parse_device_info(json_data: &[u8]) -> Result<DeviceInfo> {
     };
 
     for (&k, values) in data.iter_mut() {
-        if k == "General" || k == "HeatRecovery" {
-            for (group, val) in values.as_object().expect("unexpected general object") {
-                for (key, value) in val.as_object().expect("unexpected general object").iter() {
-                    if !value.is_array() {
-                        device_info.General.insert(
-                            format!("{}/{}/{}", k, group, key),
-                            serde_json::from_value(value.clone())?,
-                        );
+        if k == GENERAL || k == HEAT_RECOVERY {
+            for (group, val) in values.as_object().ok_or_else(|| anyhow!("Invalid general object"))? {
+                for (key, value) in val.as_object().ok_or_else(|| anyhow!("Invalid general object"))?.iter() {
+                    if value.is_array() {
+                        continue;
                     }
+
+                    device_info.General.insert(
+                        format!("{}/{}/{}", k, group, key),
+                        serde_json::from_value(value.clone())?,
+                    );
                 }
             }
         }
@@ -222,16 +219,9 @@ pub fn parse_device_info(json_data: &[u8]) -> Result<DeviceInfo> {
 }
 
 pub fn parse_node_actions(json_data: &[u8]) -> Result<Vec<NodeActions>> {
-    let data: HashMap<&str, serde_json::Value> = serde_json::from_slice(json_data)?;
-
-    let mut node_actions = Vec::new();
-    for (&k, value) in data.iter() {
-        if k == "Nodes" {
-            node_actions = serde_json::from_value(value.clone())?;
-        }
-    }
-
-    Ok(node_actions)
+    let mut data: HashMap<&str, serde_json::Value> = serde_json::from_slice(json_data)?;
+    let json_nodes = data.remove("Nodes").ok_or_else(|| anyhow!("Missing nodes list"))?;
+    Ok(serde_json::from_value(json_nodes)?)
 }
 
 impl<'de> serde::Deserialize<'de> for StatusValue {
