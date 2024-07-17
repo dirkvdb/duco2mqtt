@@ -25,36 +25,28 @@ impl DucoBoxDevice {
     }
 
     pub fn topics_that_need_updating(&mut self) -> Vec<MqttData> {
-        let mut topics = Vec::new();
-
-        for (key, value) in self.status.iter_mut() {
-            if value.modified() {
-                let val = value.get_and_reset();
-                topics.push(MqttData {
-                    topic: key.clone(),
-                    payload: val.to_string(),
-                });
-            }
-        }
-
-        topics
+        self.status
+            .iter_mut()
+            .filter(|(_key, value)| value.is_modified())
+            .map(|(key, value)| MqttData {
+                topic: key.clone(),
+                payload: value.get_and_reset().to_string(),
+            })
+            .collect()
     }
 
     fn merge_status_values(&mut self, values: HashMap<String, StatusField>) {
         for (name, value) in values {
-            let key = name.to_string();
-            if let Some(info_value) = self.status.get_mut(&key) {
+            if let Some(info_value) = self.status.get_mut(&name) {
                 info_value.set(value.Val);
             } else {
-                self.status.insert(key, InfoValue::new(value.Val));
+                self.status.insert(name, InfoValue::new(value.Val));
             }
         }
     }
 
-    pub fn update_status(&mut self, dev: DeviceInfo) -> Result<()> {
+    pub fn update_status(&mut self, dev: DeviceInfo) {
         self.merge_status_values(dev.General);
-
-        Ok(())
     }
 }
 
@@ -63,7 +55,7 @@ impl TryFrom<ducoapi::DeviceInfo> for DucoBoxDevice {
 
     fn try_from(device_info: ducoapi::DeviceInfo) -> Result<Self> {
         let mut dev = DucoBoxDevice::new();
-        dev.update_status(device_info)?;
+        dev.update_status(device_info);
         Ok(dev)
     }
 }

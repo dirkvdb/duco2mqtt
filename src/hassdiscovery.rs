@@ -87,7 +87,7 @@ pub fn create_sensor_for_status(node_nr: u16, base_topic: &str, topic_name: &str
 
     Sensor {
         origin: Origin::duco2mqtt(),
-        name: String::from(topic_name),
+        name: topic_name.to_string(),
         obj_id: unique_id.clone(),
         unique_id,
         stat_t: format!("{}duco_node_{}/{}", base_topic, node_nr, topic_name),
@@ -115,35 +115,11 @@ pub fn create_light_for_status(
         stat_t: format!("{}duco_node_{}/{}", base_topic, node_nr, topic_name),
         avty_t: format!("{}state", base_topic),
         cmd_t: format!("{}duco_node_{}/cmnd/{}", base_topic, node_nr, cmd_topic_name),
-        payload_on: String::from("1"),
-        payload_off: String::from("0"),
+        payload_on: "1".to_string(),
+        payload_off: "0".to_string(),
         icon: None,
     }
 }
-
-// pub fn create_number_for_register<TReg: std::string::ToString>(
-//     node_nr: u16,
-//     base_topic: &str,
-//     topic_name: &str,
-//     reg: TReg,
-// ) -> Number {
-//     let unique_id = format!("duco_node_{}_{}", node_nr, reg.to_string());
-
-//     Number {
-//         origin: Origin::duco2mqtt(),
-//         name: String::from(topic_name),
-//         obj_id: unique_id.clone(),
-//         unique_id,
-//         stat_t: format!("{}node_{}/{}", base_topic, node_nr, topic_name),
-//         avty_t: format!("{}state", base_topic),
-//         cmd_t: format!("{}node_{}/cmnd/{}", base_topic, node_nr, topic_name),
-//         device_class: None,
-//         min: None,
-//         max: None,
-//         unit_of_measurement: None,
-//         icon: None,
-//     }
-// }
 
 pub fn create_select_for_status(
     node_nr: u16,
@@ -157,7 +133,7 @@ pub fn create_select_for_status(
 
     Select {
         origin: Origin::duco2mqtt(),
-        name: String::from(topic_name),
+        name: topic_name.to_string(),
         obj_id: unique_id.clone(),
         unique_id,
         stat_t: format!("{}duco_node_{}/{}", base_topic, node_nr, topic_name),
@@ -177,7 +153,7 @@ pub fn ventilation_state_topic(node: &DucoBoxNode, base_topic: &str, valid_state
         "ventilation_state",
         valid_states,
     );
-    select.icon = Some(String::from("mdi:fan"));
+    select.icon = Some("mdi:fan".to_string());
 
     Ok(MqttData {
         topic: format!("{}/select/{}/config", HASS_DISCOVERY_TOPIC, select.unique_id),
@@ -213,9 +189,9 @@ pub fn flow_level_target_topic(node: &DucoBoxNode, base_topic: &str) -> Result<M
         "ventilation/FlowLvlTgt",
         "ventilation_flow_level_target",
     );
-    sensor.state_class = Some(String::from("measurement"));
-    sensor.unit_of_measurement = Some(String::from("%"));
-    sensor.icon = Some(String::from("mdi:fan-clock"));
+    sensor.state_class = Some("measurement".to_string());
+    sensor.unit_of_measurement = Some("%".to_string());
+    sensor.icon = Some("mdi:fan-clock".to_string());
 
     Ok(MqttData {
         topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
@@ -225,9 +201,9 @@ pub fn flow_level_target_topic(node: &DucoBoxNode, base_topic: &str) -> Result<M
 
 pub fn co2_sensor_topic(node: &DucoBoxNode, base_topic: &str) -> Result<MqttData> {
     let mut sensor = create_sensor_for_status(node.number(), base_topic, "sensor/IaqCo2", "sensor_iaq_co2");
-    sensor.state_class = Some(String::from("measurement"));
-    sensor.unit_of_measurement = Some(String::from("%"));
-    sensor.icon = Some(String::from("mdi:molecule-co2"));
+    sensor.state_class = Some("measurement".to_string());
+    sensor.unit_of_measurement = Some("%".to_string());
+    sensor.icon = Some("mdi:molecule-co2".to_string());
 
     Ok(MqttData {
         topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
@@ -244,7 +220,7 @@ pub fn state_time_remaining_topic(node: &DucoBoxNode, base_topic: &str) -> Resul
     );
     sensor.state_class = Some(String::from("measurement"));
     sensor.unit_of_measurement = Some(String::from("seconds"));
-    sensor.icon = Some(String::from("mdi:timer"));
+    sensor.icon = Some("mdi:timer".to_string());
 
     Ok(MqttData {
         topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
@@ -254,7 +230,7 @@ pub fn state_time_remaining_topic(node: &DucoBoxNode, base_topic: &str) -> Resul
 
 pub fn identify_topic(node: &DucoBoxNode, base_topic: &str) -> Result<MqttData> {
     let mut light = create_light_for_status(node.number(), base_topic, "general/Identify", "SetIdentify", "identify");
-    light.icon = Some(String::from("mdi:led-on"));
+    light.icon = Some("mdi:led-on".to_string());
 
     Ok(MqttData {
         topic: format!("{}/light/{}/config", HASS_DISCOVERY_TOPIC, light.unique_id),

@@ -1,10 +1,13 @@
 use core::fmt;
 use std::collections::HashMap;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use serde::{Deserialize, Serialize};
 
-use crate::{Error, Result};
+use crate::{
+    ducoboxnode::{GENERAL, SENSOR, VENTILATION},
+    Result,
+};
 
 #[derive(Debug, Deserialize)]
 enum NodeType {
@@ -134,56 +137,57 @@ pub async fn get_node_actions(client: &reqwest::Client, addr: &str) -> Result<Ve
     let response = client.get(&url).send().await.context("Failed to obtain node actions")?;
     let json_data = response.bytes().await?;
     let mut nodes = parse_node_actions(&json_data)?;
-
     nodes.sort_by(|a, b| a.Node.cmp(&b.Node));
-
     Ok(nodes)
 }
 
+fn parse_node_id(json_val: &serde_json::Value) -> Result<u16> {
+    json_val
+        .as_u64()
+        .map(|v| v as u16)
+        .ok_or_else(|| anyhow!("Invalid node id: {}", json_val))
+}
+
+fn parse_status_map(
+    group: &str,
+    json_val: &mut serde_json::Map<String, serde_json::Value>,
+) -> Result<HashMap<String, StatusField>> {
+    Ok(serde_json::from_value(
+        json_val
+            .remove(group)
+            .ok_or_else(|| anyhow!("Missing {} object", group))?,
+    )?)
+}
+
+fn parse_optional_status_map(
+    group: &str,
+    json_val: &mut serde_json::Map<String, serde_json::Value>,
+) -> Result<Option<HashMap<String, StatusField>>> {
+    if json_val.contains_key(group) {
+        Ok(Some(parse_status_map(group, json_val)?))
+    } else {
+        Ok(None)
+    }
+}
+
 pub fn parse_node_info(json_data: &[u8]) -> Result<Vec<NodeInfo>> {
-    let mut data: HashMap<&str, serde_json::Value> = serde_json::from_slice(json_data)?;
+    let mut data: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(json_data)?;
 
     let mut nodes = Vec::new();
-    for (&k, values) in data.iter_mut() {
+    for (k, values) in data.iter_mut() {
         if k == "Nodes" {
-            if let Some(node_values) = values.as_array() {
+            if let Some(node_values) = values.as_array_mut() {
                 for node in node_values {
-                    let mut node_id: Option<u16> = None;
-                    let mut general: Option<HashMap<String, StatusField>> = None;
-                    let mut ventilation: Option<HashMap<String, StatusField>> = None;
-                    let mut sensor: Option<HashMap<String, StatusField>> = None;
-
                     if node.is_object() {
-                        for (k, v) in node.as_object().expect("unexpected node").iter() {
-                            match k.as_str() {
-                                "Node" => {
-                                    node_id = Some(
-                                        v.as_u64()
-                                            .ok_or_else(|| Error::Runtime("Invalid node id".to_string()))?
-                                            as u16,
-                                    );
-                                }
-                                "General" => {
-                                    general = Some(serde_json::from_value(v.clone())?);
-                                }
-                                "Ventilation" => {
-                                    ventilation = Some(serde_json::from_value(v.clone())?);
-                                }
-                                "Sensor" => {
-                                    sensor = Some(serde_json::from_value(v.clone())?);
-                                }
-                                _ => {}
-                            };
-                        }
-                    }
+                        let node = node.as_object_mut().expect("unexpected node");
 
-                    nodes.push(NodeInfo {
-                        Node: node_id.ok_or_else(|| Error::Runtime("Missing node id".to_string()))?,
-                        General: general.ok_or_else(|| Error::Runtime("Missing general object".to_string()))?,
-                        Ventilation: ventilation
-                            .ok_or_else(|| Error::Runtime("Missing ventilation object".to_string()))?,
-                        Sensor: sensor,
-                    });
+                        nodes.push(NodeInfo {
+                            Node: parse_node_id(node.get("Node").ok_or_else(|| anyhow!("Missing node number"))?)?,
+                            General: parse_status_map(GENERAL, node)?,
+                            Ventilation: parse_status_map(VENTILATION, node)?,
+                            Sensor: parse_optional_status_map(SENSOR, node)?,
+                        });
+                    }
                 }
             }
         }

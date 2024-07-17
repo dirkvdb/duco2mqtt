@@ -12,8 +12,8 @@ use crate::{
 
 use anyhow::{anyhow, bail};
 
-pub const GENERAL: &str = "general";
-pub const VENTILATION: &str = "ventilation";
+pub const GENERAL: &str = "General";
+pub const VENTILATION: &str = "Ventilation";
 pub const SENSOR: &str = "sensor";
 
 pub enum DucoNodeAction {
@@ -56,7 +56,7 @@ impl DucoBoxNode {
         let mut topics = Vec::new();
 
         for (key, value) in self.status.iter_mut() {
-            if value.modified() {
+            if value.is_modified() {
                 let val = value.get_and_reset();
                 topics.push(MqttData {
                     topic: DucoBoxNode::status_topic(self.number, key),
@@ -252,9 +252,9 @@ mod tests {
     #[test]
     fn test_info_value() {
         let mut val = InfoValue::new(StatusValue::String("foo".to_string()));
-        assert!(val.modified());
+        assert!(val.is_modified());
         assert_eq!(val.get_and_reset(), StatusValue::String("foo".to_string()));
-        assert!(!val.modified());
+        assert!(!val.is_modified());
     }
 
     #[test]
@@ -294,8 +294,8 @@ mod tests {
         assert_eq!(
             topics,
             vec![
-                MqttData::new("duco_node_1/general/SubType", "1"),
-                MqttData::new("duco_node_1/general/Type", "BOX")
+                MqttData::new("duco_node_1/General/SubType", "1"),
+                MqttData::new("duco_node_1/General/Type", "BOX")
             ]
         );
 
@@ -312,7 +312,7 @@ mod tests {
         node.update_status(node_info_update.clone()).unwrap();
         assert_eq!(
             node.topics_that_need_updating(),
-            vec![MqttData::new("duco_node_1/general/SubType", "2"),]
+            vec![MqttData::new("duco_node_1/General/SubType", "2"),]
         );
 
         node.update_status(node_info_update.clone()).unwrap();

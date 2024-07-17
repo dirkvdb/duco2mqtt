@@ -19,7 +19,7 @@ impl InfoValue {
         }
     }
 
-    pub fn modified(&self) -> bool {
+    pub fn is_modified(&self) -> bool {
         self.modified
     }
 
