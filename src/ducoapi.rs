@@ -17,7 +17,6 @@ enum NodeType {
     Co2,
 }
 
-#[allow(non_snake_case)]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum StatusValue {
     String(String),
@@ -33,16 +32,16 @@ impl fmt::Display for StatusValue {
     }
 }
 
-#[allow(non_snake_case)]
 #[derive(Debug, Deserialize, Clone)]
 pub struct StatusField {
-    pub Val: StatusValue,
+    #[serde(rename = "Val")]
+    pub val: StatusValue,
 }
 
 impl From<&str> for StatusField {
     fn from(val: &str) -> StatusField {
         StatusField {
-            Val: StatusValue::String(val.to_string()),
+            val: StatusValue::String(val.to_string()),
         }
     }
 }
@@ -50,53 +49,61 @@ impl From<&str> for StatusField {
 impl From<i64> for StatusField {
     fn from(val: i64) -> StatusField {
         StatusField {
-            Val: StatusValue::Number(val),
+            val: StatusValue::Number(val),
         }
     }
 }
 
-#[allow(non_snake_case)]
 #[derive(Debug, Deserialize, Clone)]
 pub struct NodeInfo {
-    pub Node: u16,
-    pub General: HashMap<String, StatusField>,
-    pub Ventilation: HashMap<String, StatusField>,
-    pub Sensor: Option<HashMap<String, StatusField>>,
+    #[serde(rename = "Node")]
+    pub node: u16,
+    #[serde(rename = "General")]
+    pub general: HashMap<String, StatusField>,
+    #[serde(rename = "Ventilation")]
+    pub ventilation: HashMap<String, StatusField>,
+    #[serde(rename = "Sensor")]
+    pub sensor: Option<HashMap<String, StatusField>>,
 }
 
-#[allow(non_snake_case)]
 #[derive(Debug, Deserialize, Clone)]
 pub struct DeviceInfo {
-    pub General: HashMap<String, StatusField>,
+    #[serde(rename = "General")]
+    pub general: HashMap<String, StatusField>,
 }
 
-#[allow(non_snake_case)]
 #[derive(Debug, Serialize)]
 pub struct NodeEnumAction {
-    pub Action: String,
-    pub Val: String,
+    #[serde(rename = "Action")]
+    pub action: String,
+    #[serde(rename = "Val")]
+    pub val: String,
 }
 
-#[allow(non_snake_case)]
 #[derive(Debug, Serialize)]
 pub struct NodeBoolAction {
-    pub Action: String,
-    pub Val: bool,
+    #[serde(rename = "Action")]
+    pub action: String,
+    #[serde(rename = "Val")]
+    pub val: bool,
 }
 
-#[allow(non_snake_case)]
 #[derive(Debug, Deserialize)]
 pub struct NodeActionDescription {
-    pub Action: String,
-    pub ValType: String,
-    pub Enum: Option<Vec<String>>,
+    #[serde(rename = "Action")]
+    pub action: String,
+    #[serde(rename = "ValType")]
+    pub val_type: String,
+    #[serde(rename = "Enum")]
+    pub values: Option<Vec<String>>,
 }
 
-#[allow(non_snake_case)]
 #[derive(Debug, Deserialize)]
 pub struct NodeActions {
-    pub Node: u16,
-    pub Actions: Vec<NodeActionDescription>,
+    #[serde(rename = "Node")]
+    pub node: u16,
+    #[serde(rename = "Actions")]
+    pub actions: Vec<NodeActionDescription>,
 }
 
 pub async fn perform_action<T: serde::Serialize>(
@@ -128,7 +135,7 @@ pub async fn get_nodes(client: &reqwest::Client, addr: &str) -> Result<Vec<NodeI
     let response = client.get(&url).send().await.context("Failed to obtain nodes")?;
     let json_data = response.bytes().await?;
     let mut nodes = parse_node_info(&json_data)?;
-    nodes.sort_by(|a, b| a.Node.cmp(&b.Node));
+    nodes.sort_by(|a, b| a.node.cmp(&b.node));
     Ok(nodes)
 }
 
@@ -137,7 +144,7 @@ pub async fn get_node_actions(client: &reqwest::Client, addr: &str) -> Result<Ve
     let response = client.get(&url).send().await.context("Failed to obtain node actions")?;
     let json_data = response.bytes().await?;
     let mut nodes = parse_node_actions(&json_data)?;
-    nodes.sort_by(|a, b| a.Node.cmp(&b.Node));
+    nodes.sort_by(|a, b| a.node.cmp(&b.node));
     Ok(nodes)
 }
 
@@ -182,10 +189,10 @@ pub fn parse_node_info(json_data: &[u8]) -> Result<Vec<NodeInfo>> {
         .map(|node| -> Result<NodeInfo> {
             let node = node.as_object_mut().ok_or_else(|| anyhow!("Invalid node object"))?;
             Ok(NodeInfo {
-                Node: parse_node_id(node.get("Node").ok_or_else(|| anyhow!("Missing node number"))?)?,
-                General: parse_status_map(GENERAL, node)?,
-                Ventilation: parse_status_map(VENTILATION, node)?,
-                Sensor: parse_optional_status_map(SENSOR, node)?,
+                node: parse_node_id(node.get("Node").ok_or_else(|| anyhow!("Missing node number"))?)?,
+                general: parse_status_map(GENERAL, node)?,
+                ventilation: parse_status_map(VENTILATION, node)?,
+                sensor: parse_optional_status_map(SENSOR, node)?,
             })
         })
         .collect()
@@ -195,7 +202,7 @@ pub fn parse_device_info(json_data: &[u8]) -> Result<DeviceInfo> {
     let mut data: HashMap<&str, serde_json::Value> = serde_json::from_slice(json_data)?;
 
     let mut device_info = DeviceInfo {
-        General: HashMap::new(),
+        general: HashMap::new(),
     };
 
     for (&k, values) in data.iter_mut() {
@@ -206,7 +213,7 @@ pub fn parse_device_info(json_data: &[u8]) -> Result<DeviceInfo> {
                         continue;
                     }
 
-                    device_info.General.insert(
+                    device_info.general.insert(
                         format!("{}/{}/{}", k, group, key),
                         serde_json::from_value(value.clone())?,
                     );
@@ -281,15 +288,15 @@ mod tests {
 
         let device = parse_device_info(json_repsonse).unwrap();
         assert_eq!(
-            device.General["General/Board/BoxName"].Val,
+            device.general["General/Board/BoxName"].val,
             StatusValue::String("ENERGY".to_string())
         );
         assert_eq!(
-            device.General["General/Board/BoxSubTypeName"].Val,
+            device.general["General/Board/BoxSubTypeName"].val,
             StatusValue::String("PREMIUM_400_2ZH_R".to_string())
         );
         assert_eq!(
-            device.General["HeatRecovery/General/TimeFilterRemain"].Val,
+            device.general["HeatRecovery/General/TimeFilterRemain"].val,
             StatusValue::Number(59)
         );
     }

@@ -38,16 +38,16 @@ impl DucoBoxDevice {
     fn merge_status_values(&mut self, values: HashMap<String, StatusField>) {
         for (name, value) in values {
             match self.status.get_mut(&name) {
-                Some(info_value) => info_value.set(value.Val),
+                Some(info_value) => info_value.set(value.val),
                 None => {
-                    self.status.insert(name, InfoValue::new(value.Val));
+                    self.status.insert(name, InfoValue::new(value.val));
                 }
             }
         }
     }
 
     pub fn update_status(&mut self, dev: DeviceInfo) {
-        self.merge_status_values(dev.General);
+        self.merge_status_values(dev.general);
     }
 }
 

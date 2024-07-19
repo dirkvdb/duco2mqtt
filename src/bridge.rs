@@ -97,10 +97,10 @@ impl DucoMqttBridge {
             .zip(node_actions.into_iter())
             .map(|(node_info, actions)| {
                 ensure!(
-                    node_info.Node == actions.Node,
+                    node_info.node == actions.node,
                     "Node mismatch ({} <-> {})",
-                    node_info.Node,
-                    actions.Node
+                    node_info.node,
+                    actions.node
                 );
 
                 let mut node = DucoBoxNode::try_from(node_info)?;
@@ -201,7 +201,7 @@ impl DucoMqttBridge {
 
     fn merge_nodes(&mut self, new_nodes: Vec<NodeInfo>) -> Result<()> {
         for new_node in new_nodes {
-            if let Ok(node) = self.node_with_number(new_node.Node) {
+            if let Ok(node) = self.node_with_number(new_node.node) {
                 node.update_status(new_node)?;
             } else {
                 self.nodes.push(DucoBoxNode::try_from(new_node)?);

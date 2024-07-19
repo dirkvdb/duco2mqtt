@@ -89,19 +89,19 @@ impl DucoBoxNode {
         for (name, value) in values {
             let key = format!("{sub_topic}/{name}");
             if let Some(info_value) = self.status.get_mut(&key) {
-                info_value.set(value.Val);
+                info_value.set(value.val);
             } else {
-                self.status.insert(key, InfoValue::new(value.Val));
+                self.status.insert(key, InfoValue::new(value.val));
             }
         }
     }
 
     pub fn update_status(&mut self, node: NodeInfo) -> Result<()> {
-        assert_eq!(self.number, node.Node, "Node number mismatch");
+        assert_eq!(self.number, node.node, "Node number mismatch");
 
-        self.merge_status_values(GENERAL, node.General);
-        self.merge_status_values(VENTILATION, node.Ventilation);
-        if let Some(sensor) = node.Sensor {
+        self.merge_status_values(GENERAL, node.general);
+        self.merge_status_values(VENTILATION, node.ventilation);
+        if let Some(sensor) = node.sensor {
             self.merge_status_values(SENSOR, sensor);
         }
 
@@ -110,7 +110,7 @@ impl DucoBoxNode {
 
     pub fn set_actions(&mut self, actions: NodeActions) -> Result<()> {
         self.actions = actions
-            .Actions
+            .actions
             .into_iter()
             .map(DucoNodeAction::try_from)
             .collect::<Result<Vec<_>>>()?;
@@ -121,9 +121,9 @@ impl DucoBoxNode {
     fn verify_enum_action_is_valid(&self, action: &NodeEnumAction) -> Result<()> {
         for node_action in &self.actions {
             if let DucoNodeAction::SetEnum(ref action_name, ref values) = node_action {
-                if action_name == &action.Action {
-                    if !values.contains(&action.Val) {
-                        bail!("Invalid value for action '{}': '{}'", action.Action, action.Val);
+                if action_name == &action.action {
+                    if !values.contains(&action.val) {
+                        bail!("Invalid value for action '{}': '{}'", action.action, action.val);
                     }
 
                     return Ok(());
@@ -131,19 +131,19 @@ impl DucoBoxNode {
             }
         }
 
-        Err(anyhow!("Invalid action for node {}: '{}'", self.number, action.Action))
+        Err(anyhow!("Invalid action for node {}: '{}'", self.number, action.action))
     }
 
     fn verify_bool_action_is_valid(&self, action: &NodeBoolAction) -> Result<()> {
         for node_action in &self.actions {
             if let DucoNodeAction::SetBoolean(ref action_name) = node_action {
-                if *action_name == action.Action {
+                if *action_name == action.action {
                     return Ok(());
                 }
             }
         }
 
-        Err(anyhow!("Invalid action for node {}: '{}'", self.number, action.Action))
+        Err(anyhow!("Invalid action for node {}: '{}'", self.number, action.action))
     }
 
     pub async fn process_command(
@@ -160,8 +160,8 @@ impl DucoBoxNode {
             match action {
                 DucoNodeAction::SetEnum(_, _) => {
                     let action = NodeEnumAction {
-                        Action: action_name,
-                        Val: data,
+                        action: action_name,
+                        val: data,
                     };
 
                     self.process_enum_command(action, client, addr).await?;
@@ -172,8 +172,8 @@ impl DucoBoxNode {
                     }
 
                     let action = NodeBoolAction {
-                        Action: action_name,
-                        Val: data == "1",
+                        action: action_name,
+                        val: data == "1",
                     };
 
                     self.process_bool_command(action, client, addr).await?;
@@ -212,10 +212,10 @@ impl TryFrom<ducoapi::NodeInfo> for DucoBoxNode {
 
     fn try_from(node_info: ducoapi::NodeInfo) -> Result<Self> {
         let StatusValue::String(ref type_str) = node_info
-            .General
+            .general
             .get("Type")
             .ok_or_else(|| Error::Runtime("Type missing".to_string()))?
-            .Val
+            .val
         else {
             bail!("Node type is not a string value");
         };
@@ -223,7 +223,7 @@ impl TryFrom<ducoapi::NodeInfo> for DucoBoxNode {
         let node_type =
             NodeType::from_str(type_str).map_err(|_| Error::Runtime(format!("Unknown node type: {}", type_str)))?;
 
-        let mut node = DucoBoxNode::create_for_node_type(node_type, node_info.Node);
+        let mut node = DucoBoxNode::create_for_node_type(node_type, node_info.node);
         node.update_status(node_info)?;
         Ok(node)
     }
@@ -233,15 +233,15 @@ impl TryFrom<NodeActionDescription> for DucoNodeAction {
     type Error = anyhow::Error;
 
     fn try_from(action: NodeActionDescription) -> Result<Self> {
-        match action.ValType.as_str() {
+        match action.val_type.as_str() {
             "Enum" => Ok(DucoNodeAction::SetEnum(
-                action.Action,
+                action.action,
                 action
-                    .Enum
+                    .values
                     .ok_or_else(|| Error::Runtime("Enum values missing for action".to_string()))?,
             )),
-            "Boolean" => Ok(DucoNodeAction::SetBoolean(action.Action)),
-            _ => Err(anyhow!("Unsupported action type '{}'", action.ValType)),
+            "Boolean" => Ok(DucoNodeAction::SetBoolean(action.action)),
+            _ => Err(anyhow!("Unsupported action type '{}'", action.val_type)),
         }
     }
 }
@@ -261,9 +261,9 @@ mod tests {
     #[test]
     fn test_duco_node_action() {
         let action = NodeActionDescription {
-            Action: "foo".to_string(),
-            ValType: "Enum".to_string(),
-            Enum: Some(vec!["bar".to_string()]),
+            action: "foo".to_string(),
+            val_type: "Enum".to_string(),
+            values: Some(vec!["bar".to_string()]),
         };
 
         let duco_action = DucoNodeAction::try_from(action).unwrap();
@@ -278,13 +278,13 @@ mod tests {
     #[test]
     fn test_ducobox_node() {
         let node_info = NodeInfo {
-            Node: 1,
-            General: HashMap::from([
+            node: 1,
+            general: HashMap::from([
                 ("Type".to_string(), StatusField::from("BOX")),
                 ("SubType".to_string(), StatusField::from(1)),
             ]),
-            Ventilation: HashMap::new(),
-            Sensor: None,
+            ventilation: HashMap::new(),
+            sensor: None,
         };
 
         let mut node = DucoBoxNode::try_from(node_info).unwrap();
@@ -301,13 +301,13 @@ mod tests {
         );
 
         let node_info_update = NodeInfo {
-            Node: 1,
-            General: HashMap::from([
+            node: 1,
+            general: HashMap::from([
                 ("SubType".to_string(), StatusField::from(2)),
                 ("Type".to_string(), StatusField::from("BOX")),
             ]),
-            Ventilation: HashMap::new(),
-            Sensor: None,
+            ventilation: HashMap::new(),
+            sensor: None,
         };
 
         node.update_status(node_info_update.clone()).unwrap();
