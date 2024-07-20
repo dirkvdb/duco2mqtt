@@ -26,6 +26,20 @@ pub enum NodeType {
     DucoWeatherStation = 39,
 }
 
+// "auto" = AutomaticMode;
+// "man1" = ManualMode1;
+// "man2" = ManualMode2;
+// "man3" = ManualMode3;
+// "empt" = EmptyHouse;
+// "alrm" = AlarmMode;
+// "cnt1" = PermanentManualMode1;
+// "cnt2" = PermanentManualMode2;
+// "cnt3" = PermanentManualMode3;
+// "aut0" = AutomaticMode;
+// "aut1" = Boost10min;
+// "aut2" = Boost20min;
+// "aut3" = Boost30min;
+
 #[derive(FromPrimitive, EnumString, VariantNames, Debug, Display)]
 #[repr(u16)]
 pub enum VentilationPosition {

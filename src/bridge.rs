@@ -116,15 +116,21 @@ impl DucoMqttBridge {
     async fn poll_ducobox(&mut self, client: &reqwest::Client) -> Result<()> {
         log::debug!("Update ducobox values");
 
-        let dev = DucoBoxDevice::try_from(ducoapi::get_device_info(client, &self.ducobox_host).await?)?;
+        let dev_info = ducoapi::get_device_info(client, &self.ducobox_host).await?;
 
-        if self.device_info.is_none() && self.hass_discovery {
-            if let Ok(mqtt_data) = DucoMqttBridge::create_hass_descriptions_for_device(&self.mqtt_base_topic) {
-                self.mqtt.publish_multiple(mqtt_data).await?;
+        match self.device_info {
+            Some(ref mut device) => {
+                device.update_status(dev_info);
+            }
+            None => {
+                if self.hass_discovery {
+                    if let Ok(mqtt_data) = DucoMqttBridge::create_hass_descriptions_for_device(&self.mqtt_base_topic) {
+                        self.mqtt.publish_multiple(mqtt_data).await?;
+                    }
+                }
+                self.device_info = Some(DucoBoxDevice::try_from(dev_info)?);
             }
         }
-
-        self.device_info = Some(dev);
 
         if self.nodes.is_empty() {
             self.nodes = DucoMqttBridge::discover_nodes(&self.ducobox_host, client).await?;
