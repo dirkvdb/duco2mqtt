@@ -180,7 +180,7 @@ pub fn filter_days_remaining_topic(base_topic: &str) -> Result<MqttData> {
     };
 
     Ok(MqttData {
-        topic: format!("{}/{}/{}/config", HASS_DISCOVERY_TOPIC, SENSOR, sensor.unique_id),
+        topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
         payload: serde_json::to_string(&sensor)?,
     })
 }
@@ -197,7 +197,7 @@ pub fn flow_level_target_topic(node: &DucoBoxNode, base_topic: &str) -> Result<M
     sensor.icon = Some("mdi:fan-clock".to_string());
 
     Ok(MqttData {
-        topic: format!("{}/{}/{}/config", HASS_DISCOVERY_TOPIC, SENSOR, sensor.unique_id),
+        topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
         payload: serde_json::to_string(&sensor)?,
     })
 }
@@ -214,7 +214,7 @@ pub fn co2_sensor_topic(node: &DucoBoxNode, base_topic: &str) -> Result<MqttData
     sensor.icon = Some("mdi:molecule-co2".to_string());
 
     Ok(MqttData {
-        topic: format!("{}/{}/{}/config", HASS_DISCOVERY_TOPIC, SENSOR, sensor.unique_id),
+        topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
         payload: serde_json::to_string(&sensor)?,
     })
 }
@@ -231,7 +231,7 @@ pub fn state_time_remaining_topic(node: &DucoBoxNode, base_topic: &str) -> Resul
     sensor.icon = Some("mdi:timer".to_string());
 
     Ok(MqttData {
-        topic: format!("{}/{}/{}/config", HASS_DISCOVERY_TOPIC, SENSOR, sensor.unique_id),
+        topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
         payload: serde_json::to_string(&sensor)?,
     })
 }
