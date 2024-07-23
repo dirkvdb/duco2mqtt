@@ -1,10 +1,10 @@
-FROM amd64/rust:1-alpine3.20 as builder
+FROM amd64/rust:1-alpine3.20 AS builder
 WORKDIR /project
 COPY . .
 
 RUN apk add libc-dev
 RUN cargo install --path .
 
-FROM amd64/alpine:3.20 as runtime
+FROM amd64/alpine:3.20 AS runtime
 COPY --from=builder /usr/local/cargo/bin/duco2mqtt /usr/local/bin/duco2mqtt
 ENTRYPOINT ["duco2mqtt"]
