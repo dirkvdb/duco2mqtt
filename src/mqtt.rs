@@ -51,7 +51,6 @@ pub struct MqttConnection {
     client: AsyncClient,
     eventloop: EventLoop,
     base_topic: String,
-    online: bool,
 }
 
 fn from_mqtt_string(stream: &bytes::Bytes) -> Result<String> {
@@ -92,7 +91,6 @@ impl MqttConnection {
             client,
             eventloop,
             base_topic: cfg.base_topic,
-            online: false,
         }
     }
 
@@ -126,25 +124,17 @@ impl MqttConnection {
     }
 
     pub async fn publish_online(&mut self) -> Result<()> {
-        if !self.online {
-            self.client
-                .publish(state_topic(&self.base_topic), QoS::AtLeastOnce, true, ONLINE_PAYLOAD)
-                .await?;
-            self.online = true;
-        }
+        self.client
+            .publish(state_topic(&self.base_topic), QoS::AtLeastOnce, true, ONLINE_PAYLOAD)
+            .await?;
 
         Ok(())
     }
 
     pub async fn publish_offline(&mut self) -> Result<()> {
-        if self.online {
-            self.client
-                .publish(state_topic(&self.base_topic), QoS::AtLeastOnce, true, OFFLINE_PAYLOAD)
-                .await?;
-
-            self.online = false;
-        }
-
+        self.client
+            .publish(state_topic(&self.base_topic), QoS::AtLeastOnce, true, OFFLINE_PAYLOAD)
+            .await?;
         Ok(())
     }
 
