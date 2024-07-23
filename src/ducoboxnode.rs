@@ -14,7 +14,7 @@ use anyhow::{anyhow, bail};
 
 pub const GENERAL: &str = "General";
 pub const VENTILATION: &str = "Ventilation";
-pub const SENSOR: &str = "sensor";
+pub const SENSOR: &str = "Sensor";
 pub const HEAT_RECOVERY: &str = "HeatRecovery";
 
 pub enum DucoNodeAction {
