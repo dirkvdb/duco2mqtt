@@ -172,7 +172,7 @@ pub fn filter_days_remaining_topic(base_topic: &str) -> Result<MqttData> {
         name: "Remaining filter days".to_string(),
         obj_id: unique_id.clone(),
         unique_id,
-        stat_t: format!("{}HeatRecovery/{}/TimeFilterRemain", GENERAL, base_topic),
+        stat_t: format!("{}HeatRecovery/{}/TimeFilterRemain", base_topic, GENERAL),
         avty_t: format!("{}state", base_topic),
         state_class: Some("measurement".to_string()),
         unit_of_measurement: Some("days".to_string()),
