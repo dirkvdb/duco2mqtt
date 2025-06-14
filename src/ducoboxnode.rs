@@ -1,13 +1,13 @@
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
+    Error, Result,
     ducoapi::{
         self, NodeActionDescription, NodeActions, NodeBoolAction, NodeEnumAction, NodeInfo, StatusField, StatusValue,
     },
     duconodetypes::NodeType,
     infovalue::{InfoValue, UNKNOWN},
     mqtt::MqttData,
-    Error, Result,
 };
 
 use anyhow::{anyhow, bail};
@@ -71,7 +71,7 @@ impl DucoBoxNode {
 
     pub fn valid_action_values(&self, action_name: &str) -> Result<&[String]> {
         for action in &self.actions {
-            if let DucoNodeAction::SetEnum(name, ref enum_values) = action {
+            if let DucoNodeAction::SetEnum(name, enum_values) = action {
                 if name == action_name {
                     return Ok(enum_values);
                 }
@@ -120,7 +120,7 @@ impl DucoBoxNode {
 
     fn verify_enum_action_is_valid(&self, action: &NodeEnumAction) -> Result<()> {
         for node_action in &self.actions {
-            if let DucoNodeAction::SetEnum(ref action_name, ref values) = node_action {
+            if let DucoNodeAction::SetEnum(action_name, values) = node_action {
                 if action_name == &action.action {
                     if !values.contains(&action.val) {
                         bail!("Invalid value for action '{}': '{}'", action.action, action.val);
@@ -136,7 +136,7 @@ impl DucoBoxNode {
 
     fn verify_bool_action_is_valid(&self, action: &NodeBoolAction) -> Result<()> {
         for node_action in &self.actions {
-            if let DucoNodeAction::SetBoolean(ref action_name) = node_action {
+            if let DucoNodeAction::SetBoolean(action_name) = node_action {
                 if *action_name == action.action {
                     return Ok(());
                 }

@@ -3,7 +3,7 @@ use crate::ducoboxdevice::DucoBoxDevice;
 use crate::ducoboxnode::DucoBoxNode;
 use crate::hassdiscovery::{self};
 use crate::mqtt::{MqttConfig, MqttConnection, MqttData};
-use crate::{ducoapi, Result};
+use crate::{Result, ducoapi};
 use anyhow::{anyhow, ensure};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -218,7 +218,7 @@ impl DucoMqttBridge {
     }
 
     async fn publish_device_info(&mut self) -> Result<()> {
-        if let Some(ref mut device_info) = &mut self.device_info {
+        if let Some(device_info) = &mut self.device_info {
             for mut mqtt_data in device_info.topics_that_need_updating() {
                 mqtt_data.topic = format!("{}{}", self.mqtt_base_topic, mqtt_data.topic);
                 log::info!("{}: {}", mqtt_data.topic, mqtt_data.payload);
@@ -242,7 +242,7 @@ impl DucoMqttBridge {
     }
 
     fn reset_status(&mut self) {
-        if let Some(ref mut device_info) = &mut self.device_info {
+        if let Some(device_info) = &mut self.device_info {
             device_info.reset();
         }
         for node in self.nodes.iter_mut() {
