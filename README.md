@@ -33,5 +33,8 @@ This version only supports the node types in my home setup. Feel free to provide
 ```
 docker build -f docker/BuildDockerfile .
 ```
+Prebuilt images are available at `dirkvdb/duco2mqtt`
+
 ![Home assistant integration](/assets/hass.png)
 <img src="assets/mqtt.png" width="250" />
+
