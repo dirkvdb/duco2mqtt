@@ -24,7 +24,7 @@ jobs:
         with:
           images: dirkvdb/duco2mqtt
           tags: |
-            type=schedule
+            type=ref,event=tag
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
