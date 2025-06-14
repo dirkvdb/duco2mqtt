@@ -3,11 +3,11 @@ use anyhow::anyhow;
 use std::time::Duration;
 
 use rumqttc::v5::{
-    mqttbytes::{
-        v5::{ConnectReturnCode, LastWill, Packet},
-        QoS,
-    },
     AsyncClient, Event, EventLoop, MqttOptions,
+    mqttbytes::{
+        QoS,
+        v5::{ConnectReturnCode, LastWill, Packet},
+    },
 };
 
 #[derive(Clone)]
