@@ -22,7 +22,12 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: dirkvdb/homecontrol
+          images: dirkvdb/duco2mqtt
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -30,5 +35,6 @@ jobs:
           context: .
           file: ./docker/BuildDockerfile
           push: true
-          tags: dirkvdb/duco2mqtt:latest
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
