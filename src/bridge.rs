@@ -56,6 +56,7 @@ impl DucoMqttBridge {
 
     pub async fn run(mut self) -> Result<()> {
         let mut interval = time::interval(self.poll_interval);
+        log::debug!("Poll interval: {interval:?}");
 
         loop {
             tokio::select! {
@@ -68,7 +69,9 @@ impl DucoMqttBridge {
                     }
                 }
                 _ = interval.tick() => {
+                    log::debug!("Polling ducobox for updates");
                     let client = self.http_client()?;
+                    log::debug!("Client obtained: {client:?}");
                     if let Err(err) = self.poll_ducobox(&client).await {
                         log::error!("Failed to update duco status: {:#}", err);
                         self.reset_status();

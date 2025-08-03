@@ -84,7 +84,7 @@ impl MqttConnection {
             mqttoptions.set_credentials(cfg.user, cfg.password);
         }
 
-        let (client, eventloop) = AsyncClient::new(mqttoptions, 100);
+        let (client, eventloop) = AsyncClient::new(mqttoptions, 1000);
 
         log::info!("MQTT connection created");
         MqttConnection {

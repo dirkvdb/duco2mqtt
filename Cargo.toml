@@ -12,7 +12,7 @@ tokio = { version = "1.47", features = [
   "io-util",
   "macros",
   "net",
-  "rt",
+  "rt-multi-thread",
   "time",
 ] }
 log = "0.4"

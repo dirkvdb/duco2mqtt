@@ -3,7 +3,7 @@ use core::time;
 use std::path::PathBuf;
 
 use clap::Parser;
-use clap_verbosity_flag::WarnLevel;
+use clap_verbosity_flag::DebugLevel;
 use duco2mqtt::{
     bridge::{self, DucoMqttBridgeConfig},
     mqtt::MqttConfig,
@@ -17,7 +17,7 @@ const PACKAGE: &str = env!("CARGO_PKG_NAME");
 #[clap(name = "duco2mqtt", about = "Interface between duco connectivity board and MQTT")]
 struct Opt {
     #[command(flatten)]
-    verbose: clap_verbosity_flag::Verbosity<WarnLevel>,
+    verbose: clap_verbosity_flag::Verbosity<DebugLevel>,
 
     // set the duco connectivity board host name
     #[clap(long = "duco-host", env = "D2M_DUCO_HOST")]
@@ -56,7 +56,7 @@ struct Opt {
     certificate: Option<String>,
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() {
     let opt = Opt::parse();
 
