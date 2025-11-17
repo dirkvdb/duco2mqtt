@@ -1,6 +1,6 @@
 use crate::{
-    ducoboxnode::{GENERAL, SENSOR, VENTILATION},
     Result,
+    ducoboxnode::{GENERAL, SENSOR, VENTILATION},
 };
 use serde::Serialize;
 
@@ -34,23 +34,6 @@ pub struct Sensor {
     pub stat_t: String,
     pub avty_t: String,
     pub state_class: Option<String>,
-    pub unit_of_measurement: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub icon: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct Number {
-    pub origin: Origin,
-    pub name: String,
-    pub obj_id: String,
-    pub unique_id: String,
-    pub stat_t: String,
-    pub avty_t: String,
-    pub cmd_t: String,
-    pub device_class: Option<String>,
-    pub min: Option<i32>,
-    pub max: Option<i32>,
     pub unit_of_measurement: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,

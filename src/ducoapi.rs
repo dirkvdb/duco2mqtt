@@ -1,21 +1,13 @@
 use core::fmt;
 use std::collections::HashMap;
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ducoboxnode::{GENERAL, HEAT_RECOVERY, SENSOR, VENTILATION},
     Result,
+    ducoboxnode::{GENERAL, HEAT_RECOVERY, SENSOR, VENTILATION},
 };
-
-#[derive(Debug, Deserialize)]
-enum NodeType {
-    #[serde(rename = "BOX")]
-    Box,
-    #[serde(rename = "UCCO2")]
-    Co2,
-}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum StatusValue {
