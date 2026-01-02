@@ -60,9 +60,8 @@ struct Opt {
 async fn main() {
     let opt = Opt::parse();
 
-    env_logger::Builder::from_env(Env::default())
+    env_logger::Builder::from_env(Env::default().default_filter_or(opt.verbose.log_level_filter().to_string()))
         .format_timestamp(None)
-        .filter_level(opt.verbose.log_level_filter())
         .init();
 
     log::info!("{} version {}", PACKAGE, VERSION);
