@@ -2,7 +2,7 @@
   description = "duco2mqtt";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url = "github:numtide/flake-utils";
   };
@@ -12,6 +12,7 @@
       nixpkgs,
       rust-overlay,
       flake-utils,
+      self,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -73,7 +74,50 @@
             }
           else
             { }
-        );
+        )
+        // {
+          # Add dockerImage to packages
+
+          dockerImage =
+            let
+              # Select the appropriate package (static for Linux, default otherwise)
+              duco2mqttApp =
+                if pkgs.stdenv.isLinux then self.packages.${system}.static else self.packages.${system}.default;
+
+              # Create an FHS-like environment for the application.
+              # This ensures the binary is at a predictable path like /app/bin/duco2mqtt
+              # along with its runtime dependencies.
+              appFhs = pkgs.buildEnv {
+                name = "duco2mqtt-fhs";
+                paths = [
+                  duco2mqttApp
+                ];
+                postBuild = ''
+                  mkdir -p $out/app/bin
+                  ln -s ${duco2mqttApp}/bin/duco2mqtt $out/app/bin/duco2mqtt
+                '';
+              };
+
+              app = pkgs.buildEnv {
+                name = "duco2mqtt";
+                paths = [
+                  appFhs
+                ];
+              };
+            in
+            pkgs.dockerTools.buildImage {
+              name = "duco2mqtt";
+              tag = "latest";
+              copyToRoot = app;
+
+              config = {
+                Cmd = [ "/app/bin/duco2mqtt" ]; # The command to run when the container starts
+                # Optionally expose ports if the application listens on any, e.g., for MQTT
+                # ExposedPorts = { "1883/tcp" = {}; };
+              };
+            };
+
+        };
       }
     );
 }
