@@ -70,14 +70,31 @@ impl DucoMqttBridge {
                 }
                 _ = interval.tick() => {
                     log::debug!("Polling ducobox for updates");
-                    let client = self.http_client()?;
-                    log::debug!("Client obtained: {client:?}");
+                    let client = match self.http_client() {
+                        Ok(client) => {
+                            log::debug!("Client obtained: {client:?}");
+                            client
+                        }
+                        Err(err) => {
+                            log::error!("Failed to create HTTP client: {:#}", err);
+                            self.reset_status();
+                            if let Err(err) = self.mqtt.publish_offline().await {
+                                log::error!("Failed to publish offline state: {:#}", err);
+                            }
+                            continue;
+                        }
+                    };
+
                     if let Err(err) = self.poll_ducobox(&client).await {
                         log::error!("Failed to update duco status: {:#}", err);
                         self.reset_status();
-                        let _ = self.mqtt.publish_offline().await;
+                        if let Err(err) = self.mqtt.publish_offline().await {
+                            log::error!("Failed to publish offline state: {:#}", err);
+                        }
                     } else {
-                        let _ = self.mqtt.publish_online().await;
+                        if let Err(err) = self.mqtt.publish_online().await {
+                            log::error!("Failed to publish online state: {:#}", err);
+                        }
                     }
                 }
             }
