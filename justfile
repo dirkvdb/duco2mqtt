@@ -28,4 +28,6 @@ dockerdev:
 
 dockerup:
     docker push dirkvdb/duco2mqtt:latest
+
+dockerdevup:
     docker push dirkvdb/duco2mqtt:develop
