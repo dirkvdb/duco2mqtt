@@ -185,7 +185,7 @@ pub fn flow_level_target_topic(node: &DucoBoxNode, base_topic: &str) -> Result<M
     })
 }
 
-pub fn co2_sensor_topic(node: &DucoBoxNode, base_topic: &str) -> Result<MqttData> {
+pub fn co2_air_quality_topic(node: &DucoBoxNode, base_topic: &str) -> Result<MqttData> {
     let mut sensor = create_sensor_for_status(
         node.number(),
         base_topic,
@@ -194,6 +194,18 @@ pub fn co2_sensor_topic(node: &DucoBoxNode, base_topic: &str) -> Result<MqttData
     );
     sensor.state_class = Some("measurement".to_string());
     sensor.unit_of_measurement = Some("%".to_string());
+    sensor.icon = Some("mdi:molecule-co2".to_string());
+
+    Ok(MqttData {
+        topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
+        payload: serde_json::to_string(&sensor)?,
+    })
+}
+
+pub fn co2_sensor_topic(node: &DucoBoxNode, base_topic: &str) -> Result<MqttData> {
+    let mut sensor = create_sensor_for_status(node.number(), base_topic, &format!("{}/Co2", SENSOR), "sensor_co2");
+    sensor.state_class = Some("measurement".to_string());
+    sensor.unit_of_measurement = Some("ppm".to_string());
     sensor.icon = Some("mdi:molecule-co2".to_string());
 
     Ok(MqttData {

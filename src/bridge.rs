@@ -292,6 +292,7 @@ impl DucoMqttBridge {
                 topics.push(hassdiscovery::identify_topic(node, base_topic)?);
             }
             crate::duconodetypes::NodeType::CO2RoomSensor => {
+                topics.push(hassdiscovery::co2_air_quality_topic(node, base_topic)?);
                 topics.push(hassdiscovery::co2_sensor_topic(node, base_topic)?);
                 topics.push(hassdiscovery::identify_topic(node, base_topic)?);
             }
