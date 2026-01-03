@@ -95,11 +95,8 @@ impl MqttConnection {
     }
 
     pub async fn poll(&mut self) -> Result<Option<MqttData>> {
-        if let Ok(msg) = self.eventloop.poll().await {
-            return self.handle_mqtt_message(msg).await;
-        }
-
-        Ok(None)
+        let msg = self.eventloop.poll().await?;
+        self.handle_mqtt_message(msg).await
     }
 
     pub async fn publish(&mut self, data: MqttData) -> Result<()> {
@@ -139,8 +136,8 @@ impl MqttConnection {
     }
 
     async fn handle_mqtt_message(&mut self, ev: Event) -> Result<Option<MqttData>> {
-        if let Event::Incoming(event) = ev {
-            match event {
+        match ev {
+            Event::Incoming(event) => match event {
                 Packet::ConnAck(data) => {
                     if data.code == ConnectReturnCode::Success {
                         if !data.session_present {
@@ -152,17 +149,18 @@ impl MqttConnection {
                     } else {
                         log::error!("MQTT connection refused: {:?}", data.code);
                     }
+                    Ok(None)
                 }
-                Packet::Publish(publ) => {
-                    return Ok(Some(MqttData {
-                        topic: from_mqtt_string(&publ.topic)?,
-                        payload: from_mqtt_string(&publ.payload)?,
-                    }));
-                }
-                _ => {}
+                Packet::Publish(publ) => Ok(Some(MqttData {
+                    topic: from_mqtt_string(&publ.topic)?,
+                    payload: from_mqtt_string(&publ.payload)?,
+                })),
+                _ => Ok(None),
+            },
+            Event::Outgoing(_) => {
+                // Handle outgoing events (keepalive, etc.) - just continue
+                Ok(None)
             }
         }
-
-        Ok(None)
     }
 }

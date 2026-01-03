@@ -61,39 +61,42 @@ impl DucoMqttBridge {
         loop {
             tokio::select! {
                 mqtt_msg = self.mqtt.poll() => {
-                    if let Ok(Some(msg)) = mqtt_msg {
-                        log::info!("MQTT cmnd: {} {}", msg.topic, msg.payload);
-                        if let Err(err) = self.handle_node_command(msg).await {
-                            log::error!("Failed to process command: {:#}", err);
+                    match mqtt_msg {
+                        Ok(Some(msg)) => {
+                            log::info!("MQTT cmnd: {} {}", msg.topic, msg.payload);
+                            if let Err(err) = self.handle_node_command(msg).await {
+                                log::error!("Failed to process command: {:#}", err);
+                            }
+                        }
+                        Ok(None) => {
+                            // No command message, just MQTT housekeeping (keepalive, etc.)
+                        }
+                        Err(err) => {
+                            // Reconnect by continuing the loop
+                            // The MQTT library will handle reconnection automatically
+                            log::error!("MQTT connection error: {:#}", err);
                         }
                     }
                 }
                 _ = interval.tick() => {
                     log::debug!("Polling ducobox for updates");
-                    let client = match self.http_client() {
+                    match self.http_client() {
                         Ok(client) => {
-                            log::debug!("Client obtained: {client:?}");
-                            client
+                            if let Err(err) = self.poll_ducobox(&client).await {
+                                log::error!("Failed to update duco status: {:#}", err);
+                                self.reset_status();
+                                if let Err(err) = self.mqtt.publish_offline().await {
+                                    log::error!("Failed to publish offline state: {:#}", err);
+                                }
+                            } else {
+                                if let Err(err) = self.mqtt.publish_online().await {
+                                    log::error!("Failed to publish online state: {:#}", err);
+                                }
+                            }
                         }
                         Err(err) => {
-                            log::error!("Failed to create HTTP client: {:#}", err);
+                            log::error!("Failed to create HTTP client ({err})");
                             self.reset_status();
-                            if let Err(err) = self.mqtt.publish_offline().await {
-                                log::error!("Failed to publish offline state: {:#}", err);
-                            }
-                            continue;
-                        }
-                    };
-
-                    if let Err(err) = self.poll_ducobox(&client).await {
-                        log::error!("Failed to update duco status: {:#}", err);
-                        self.reset_status();
-                        if let Err(err) = self.mqtt.publish_offline().await {
-                            log::error!("Failed to publish offline state: {:#}", err);
-                        }
-                    } else {
-                        if let Err(err) = self.mqtt.publish_online().await {
-                            log::error!("Failed to publish online state: {:#}", err);
                         }
                     }
                 }
