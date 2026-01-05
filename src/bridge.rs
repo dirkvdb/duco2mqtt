@@ -345,7 +345,7 @@ impl DucoMqttBridge {
         }
 
         if let Some(ref cert) = self.ducobox_certificate {
-            builder = builder.use_rustls_tls();
+            builder = builder.tls_backend_rustls();
             for cert in reqwest::Certificate::from_pem_bundle(&std::fs::read(cert)?)? {
                 builder = builder.add_root_certificate(cert);
             }
