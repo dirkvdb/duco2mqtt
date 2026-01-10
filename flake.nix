@@ -112,11 +112,8 @@
 
               config = {
                 Cmd = [ "/app/bin/duco2mqtt" ]; # The command to run when the container starts
-                # Optionally expose ports if the application listens on any, e.g., for MQTT
-                # ExposedPorts = { "1883/tcp" = {}; };
               };
             };
-
         };
       }
     );

@@ -20,6 +20,10 @@ prod:
 dev $RUST_LOG="duco2mqtt=debug" $D2M_MQTT_USER="iot" $D2M_MQTT_PASS=`cat /run/secrets/mqtt_pass 2>/dev/null || echo ""`:
     cargo run --release -- -vv --duco-ip=192.168.1.39 --duco-host duco_56dfcf.local --mqtt-addr=192.168.1.13 --mqtt-base-topic dbg/home/ventilation
 
+docker-nix:
+    nix build .#dockerImage
+    docker load < result
+
 docker:
     docker build -t dirkvdb/duco2mqtt:latest -f docker/BuildDockerfile .
 
