@@ -1,0 +1,40 @@
+{
+  "General": {
+    "Board": {
+      "PublicApiVersion": { "Val": "2.6" },
+      "BoxName": { "Val": "ENERGY" },
+      "BoxSubTypeName": { "Val": "PREMIUM_400_2ZH_R" },
+      "SerialBoardBox": { "Val": "PS0000000000" },
+      "SerialBoardComm": { "Val": "PS1928001176" },
+      "SerialDucoBox": { "Val": "n/a" },
+      "SerialDucoComm": { "Val": "P289XXX-XXXXXX-XXX" },
+      "Time": { "Val": 1772049596 }
+    },
+    "Lan": {
+      "Mode": { "Val": "ETHERNET" },
+      "Ip": { "Val": "192.168.1.39" },
+      "NetMask": { "Val": "255.255.255.0" },
+      "DefaultGateway": { "Val": "192.168.1.1" },
+      "Dns": { "Val": "192.168.1.13" },
+      "Mac": { "Val": "b1:b1:b1:b1:b1:b1" },
+      "HostName": { "Val": "duco_56dfcf" },
+      "DucoClientIp": { "Val": "0.0.0.0" },
+      "WifiApSsid": { "Val": "DUCO" },
+      "WifiApKey": { "Val": "12345678" },
+      "ScanWifi": []
+    },
+    "PublicApi": { "WriteReqCntRemain": { "Val": 300 } },
+    "Modbus": { "WriteReqCntRemain": { "Val": 300 } },
+    "Cloud": { "RegistrationMode": { "Val": false } }
+  },
+  "Diag": {},
+  "Ventilation": {
+    "Sensor": {
+      "TempOda": { "Val": 143 },
+      "TempSup": { "Val": 210 },
+      "TempEta": { "Val": 213 },
+      "TempEha": { "Val": 151 }
+    }
+  },
+  "HeatRecovery": { "General": { "TimeFilterRemain": { "Val": 122 } } }
+}

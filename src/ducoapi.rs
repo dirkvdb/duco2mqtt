@@ -13,6 +13,7 @@ use crate::{
 pub enum StatusValue {
     String(String),
     Number(i64),
+    Bool(bool),
 }
 
 impl fmt::Display for StatusValue {
@@ -20,6 +21,7 @@ impl fmt::Display for StatusValue {
         match self {
             StatusValue::String(s) => write!(f, "{}", s),
             StatusValue::Number(n) => write!(f, "{}", n),
+            StatusValue::Bool(b) => write!(f, "{}", b),
         }
     }
 }
@@ -256,6 +258,10 @@ impl<'de> serde::Deserialize<'de> for StatusValue {
             fn visit_u32<E: serde::de::Error>(self, n: u32) -> std::result::Result<StatusValue, E> {
                 Ok(StatusValue::Number(n as i64))
             }
+
+            fn visit_bool<E: serde::de::Error>(self, b: bool) -> std::result::Result<StatusValue, E> {
+                Ok(StatusValue::Bool(b))
+            }
         }
 
         deserializer.deserialize_any(NodeValueVisitor)
@@ -275,8 +281,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_device_info() {
-        let json_repsonse = include_bytes!("../test/data/info.json");
+    fn test_parse_device_info_v2_0() {
+        let json_repsonse = include_bytes!("../test/data/info_v2.0.json");
 
         let device = parse_device_info(json_repsonse).unwrap();
         assert_eq!(
@@ -290,6 +296,29 @@ mod tests {
         assert_eq!(
             device.general["HeatRecovery/General/TimeFilterRemain"].val,
             StatusValue::Number(59)
+        );
+    }
+
+    #[test]
+    fn test_parse_device_info_v2_6() {
+        let json_repsonse = include_bytes!("../test/data/info_v2.6.json");
+
+        let device = parse_device_info(json_repsonse).unwrap();
+        assert_eq!(
+            device.general["General/Board/BoxName"].val,
+            StatusValue::String("ENERGY".to_string())
+        );
+        assert_eq!(
+            device.general["General/Board/BoxSubTypeName"].val,
+            StatusValue::String("PREMIUM_400_2ZH_R".to_string())
+        );
+        assert_eq!(
+            device.general["HeatRecovery/General/TimeFilterRemain"].val,
+            StatusValue::Number(122)
+        );
+        assert_eq!(
+            device.general["General/Cloud/RegistrationMode"].val,
+            StatusValue::Bool(false)
         );
     }
 
