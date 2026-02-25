@@ -37,6 +37,10 @@ pub struct Sensor {
     pub unit_of_measurement: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_class: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value_template: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -81,6 +85,8 @@ pub fn create_sensor_for_status(node_nr: u16, base_topic: &str, topic_name: &str
         state_class: None,
         unit_of_measurement: None,
         icon: None,
+        device_class: None,
+        value_template: None,
     }
 }
 
@@ -160,6 +166,8 @@ pub fn filter_days_remaining_topic(base_topic: &str) -> Result<MqttData> {
         state_class: Some("measurement".to_string()),
         unit_of_measurement: Some("days".to_string()),
         icon: Some("mdi:calendar-clock".to_string()),
+        device_class: None,
+        value_template: None,
     };
 
     Ok(MqttData {
@@ -244,5 +252,64 @@ pub fn identify_topic(node: &DucoBoxNode, base_topic: &str) -> Result<MqttData> 
     Ok(MqttData {
         topic: format!("{}/light/{}/config", HASS_DISCOVERY_TOPIC, light.unique_id),
         payload: serde_json::to_string(&light)?,
+    })
+}
+
+fn create_device_temperature_sensor(
+    base_topic: &str,
+    sensor_name: &str,
+    unique_id_suffix: &str,
+    display_name: &str,
+) -> Sensor {
+    let unique_id = format!("duco_device_{}", unique_id_suffix);
+
+    Sensor {
+        origin: Origin::duco2mqtt(),
+        name: display_name.to_string(),
+        obj_id: unique_id.clone(),
+        unique_id,
+        stat_t: format!("{}{}/{}/{}", base_topic, VENTILATION, SENSOR, sensor_name),
+        avty_t: format!("{}state", base_topic),
+        state_class: Some("measurement".to_string()),
+        unit_of_measurement: Some("°C".to_string()),
+        icon: None,
+        device_class: Some("temperature".to_string()),
+        value_template: Some("{{ value | float / 10 }}".to_string()),
+    }
+}
+
+pub fn outdoor_air_temperature_topic(base_topic: &str) -> Result<MqttData> {
+    let sensor = create_device_temperature_sensor(base_topic, "TempOda", "temp_oda", "Outdoor Air Temperature");
+
+    Ok(MqttData {
+        topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
+        payload: serde_json::to_string(&sensor)?,
+    })
+}
+
+pub fn supply_air_temperature_topic(base_topic: &str) -> Result<MqttData> {
+    let sensor = create_device_temperature_sensor(base_topic, "TempSup", "temp_sup", "Supply Air Temperature");
+
+    Ok(MqttData {
+        topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
+        payload: serde_json::to_string(&sensor)?,
+    })
+}
+
+pub fn extract_air_temperature_topic(base_topic: &str) -> Result<MqttData> {
+    let sensor = create_device_temperature_sensor(base_topic, "TempEta", "temp_eta", "Extract Air Temperature");
+
+    Ok(MqttData {
+        topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
+        payload: serde_json::to_string(&sensor)?,
+    })
+}
+
+pub fn exhaust_air_temperature_topic(base_topic: &str) -> Result<MqttData> {
+    let sensor = create_device_temperature_sensor(base_topic, "TempEha", "temp_eha", "Exhaust Air Temperature");
+
+    Ok(MqttData {
+        topic: format!("{}/sensor/{}/config", HASS_DISCOVERY_TOPIC, sensor.unique_id),
+        payload: serde_json::to_string(&sensor)?,
     })
 }

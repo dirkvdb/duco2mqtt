@@ -9,6 +9,8 @@ use crate::{
     ducoboxnode::{GENERAL, HEAT_RECOVERY, SENSOR, VENTILATION},
 };
 
+const DEVICE_INFO_SECTIONS: [&str; 3] = [GENERAL, HEAT_RECOVERY, VENTILATION];
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum StatusValue {
     String(String),
@@ -200,7 +202,7 @@ pub fn parse_device_info(json_data: &[u8]) -> Result<DeviceInfo> {
     };
 
     for (&k, values) in data.iter_mut() {
-        if k == GENERAL || k == HEAT_RECOVERY {
+        if DEVICE_INFO_SECTIONS.contains(&k) {
             for (group, val) in values.as_object().ok_or_else(|| anyhow!("Invalid general object"))? {
                 for (key, value) in val.as_object().ok_or_else(|| anyhow!("Invalid general object"))?.iter() {
                     if value.is_array() {
@@ -319,6 +321,23 @@ mod tests {
         assert_eq!(
             device.general["General/Cloud/RegistrationMode"].val,
             StatusValue::Bool(false)
+        );
+        // New v2.6 ventilation sensor values
+        assert_eq!(
+            device.general["Ventilation/Sensor/TempOda"].val,
+            StatusValue::Number(143)
+        );
+        assert_eq!(
+            device.general["Ventilation/Sensor/TempSup"].val,
+            StatusValue::Number(210)
+        );
+        assert_eq!(
+            device.general["Ventilation/Sensor/TempEta"].val,
+            StatusValue::Number(213)
+        );
+        assert_eq!(
+            device.general["Ventilation/Sensor/TempEha"].val,
+            StatusValue::Number(151)
         );
     }
 

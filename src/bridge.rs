@@ -146,12 +146,15 @@ impl DucoMqttBridge {
                 device.update_status(dev_info);
             }
             None => {
+                let device = DucoBoxDevice::try_from(dev_info)?;
                 if self.hass_discovery {
-                    if let Ok(mqtt_data) = DucoMqttBridge::create_hass_descriptions_for_device(&self.mqtt_base_topic) {
+                    if let Ok(mqtt_data) =
+                        DucoMqttBridge::create_hass_descriptions_for_device(&self.mqtt_base_topic, &device)
+                    {
                         self.mqtt.publish_multiple(mqtt_data).await?;
                     }
                 }
-                self.device_info = Some(DucoBoxDevice::try_from(dev_info)?);
+                self.device_info = Some(device);
             }
         }
 
@@ -273,8 +276,18 @@ impl DucoMqttBridge {
         }
     }
 
-    fn create_hass_descriptions_for_device(base_topic: &str) -> Result<Vec<MqttData>> {
-        Ok(vec![hassdiscovery::filter_days_remaining_topic(base_topic)?])
+    fn create_hass_descriptions_for_device(base_topic: &str, device: &DucoBoxDevice) -> Result<Vec<MqttData>> {
+        let mut topics = vec![hassdiscovery::filter_days_remaining_topic(base_topic)?];
+
+        // Add ventilation temperature sensors for API v2.6+
+        if device.has_ventilation_sensors() {
+            topics.push(hassdiscovery::outdoor_air_temperature_topic(base_topic)?);
+            topics.push(hassdiscovery::supply_air_temperature_topic(base_topic)?);
+            topics.push(hassdiscovery::extract_air_temperature_topic(base_topic)?);
+            topics.push(hassdiscovery::exhaust_air_temperature_topic(base_topic)?);
+        }
+
+        Ok(topics)
     }
 
     fn create_hass_descriptions_for_node(node: &DucoBoxNode, base_topic: &str) -> Result<Vec<MqttData>> {

@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
+    Result,
     ducoapi::{self, DeviceInfo, StatusField, StatusValue},
     infovalue::{InfoValue, UNKNOWN},
     mqtt::MqttData,
-    Result,
 };
 
 pub struct DucoBoxDevice {
@@ -48,6 +48,11 @@ impl DucoBoxDevice {
 
     pub fn update_status(&mut self, dev: DeviceInfo) {
         self.merge_status_values(dev.general);
+    }
+
+    /// Check if the device has ventilation sensors (API v2.6+)
+    pub fn has_ventilation_sensors(&self) -> bool {
+        self.status.contains_key("Ventilation/Sensor/TempOda")
     }
 }
 
